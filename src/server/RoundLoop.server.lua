@@ -9,7 +9,7 @@ local Config = require(ReplicatedStorage:WaitForChild("IslasShared"):WaitForChil
 -- Los RemoteEvents los crea el servidor antes de cargar los demas modulos
 local Remotes = Instance.new("Folder")
 Remotes.Name = "IslasRemotes"
-for _, name in ipairs({ "VoteOptions", "VoteUpdate", "VoteEnd", "CastVote", "RoundStatus" }) do
+for _, name in ipairs({ "VoteOptions", "VoteUpdate", "VoteEnd", "CastVote", "RoundStatus", "DisasterFX" }) do
 	local r = Instance.new("RemoteEvent")
 	r.Name = name
 	r.Parent = Remotes
@@ -18,6 +18,7 @@ Remotes.Parent = ReplicatedStorage
 
 local MapService = require(script.Parent.MapService)
 local VoteService = require(script.Parent.VoteService)
+local DisasterService = require(script.Parent.DisasterService)
 local RoundStatus = Remotes.RoundStatus
 
 if not Config.RunDefaultLoop then
@@ -68,15 +69,18 @@ while true do
 		local participants = Players:GetPlayers()
 		MapService.TeleportToMap(participants)
 
-		-- Ronda
+		-- Ronda (con un desastre al azar de los que admite el mapa)
 		local endTime = os.clock() + Config.RoundTime
-		status("Sobrevive en " .. title, Config.RoundTime)
+		local disaster = Config.EnableDisasters and DisasterService.Start(MapService.GetCurrent(), Config.RoundTime) or nil
+		status(disaster and ("Desastre: " .. disaster.Title) or ("Sobrevive en " .. title), Config.RoundTime)
 		while os.clock() < endTime and alivePlayers(participants) > 0 do
 			task.wait(0.5)
 		end
+		DisasterService.Stop()
+		local survivors = alivePlayers(participants)
 
 		-- Fin: vuelta al lobby y se borra la isla (el siguiente mapa no existe hasta votarlo)
-		status("Fin de la ronda")
+		status("Fin de la ronda: sobrevivieron " .. survivors .. " de " .. #participants)
 		MapService.ReturnToLobby(Players:GetPlayers())
 		task.wait(2)
 		MapService.Unload()

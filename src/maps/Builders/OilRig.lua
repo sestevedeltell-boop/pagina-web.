@@ -11,6 +11,9 @@ local OilRig = {
 	Title = "Plataforma Petrolifera",
 	Description = "Plataforma en alta mar con torre de perforacion, helipuerto y ascensor desde el muelle.",
 	Lighting = { ClockTime = 19.5, Brightness = 2, FogEnd = 2500, FogColor = C(120, 130, 150) },
+	Bounds = { x1 = -50, x2 = 50, z1 = -50, z2 = 50, top = 110, floor = 0 },
+	Disasters = { "Tornado", "Lightning", "Meteors", "Flood", "Fire", "AcidRain" },
+	DisasterConfig = { Flood = { maxHeight = 46 } }, -- tsunami: inunda la cubierta, el modulo y el helipuerto quedan a salvo
 }
 
 local DECK = 30

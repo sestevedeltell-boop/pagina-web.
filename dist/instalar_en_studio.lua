@@ -59,6 +59,10 @@ return {
 	-- Cuantos mapas salen en la votacion
 	OptionsPerVote = 3,
 
+	-- Desastres: segundos de aviso tras llegar a la isla antes de que empiece, y si estan activados
+	EnableDisasters = true,
+	DisasterDelay = 10,
+
 	-- Minimo de jugadores para empezar una ronda
 	MinPlayers = 1,
 
@@ -81,6 +85,9 @@ local Airport = {
 	Title = "Aeropuerto",
 	Description = "Terminal de 3 plantas con ascensores, torre de control, aviones, hangar y pista.",
 	Lighting = { ClockTime = 15, Brightness = 2 },
+	Bounds = { x1 = -200, x2 = 200, z1 = -170, z2 = 100, top = 130, floor = 0 },
+	Disasters = { "Earthquake", "Fire", "Meteors", "Flood", "Lightning", "Tornado" },
+	DisasterConfig = { Flood = { maxHeight = 30 } }, -- el agua llega a la planta 1; la 2 y la torre quedan a salvo
 }
 
 local WHITE = C(235, 238, 242)
@@ -342,6 +349,9 @@ local Mall = {
 	Title = "Centro Comercial",
 	Description = "4 plantas con atrio, ascensores de cristal, escaleras, tiendas, fuente y cine.",
 	Lighting = { ClockTime = 12, Brightness = 2 },
+	Bounds = { x1 = -110, x2 = 110, z1 = -90, z2 = 150, top = 80, floor = 0 },
+	Disasters = { "Earthquake", "Fire", "Meteors", "AcidRain", "Lava" },
+	DisasterConfig = { Lava = { maxHeight = 40 } }, -- hay que llegar a la ultima planta
 }
 
 local FLOOR_H = 16
@@ -525,6 +535,9 @@ local OilRig = {
 	Title = "Plataforma Petrolifera",
 	Description = "Plataforma en alta mar con torre de perforacion, helipuerto y ascensor desde el muelle.",
 	Lighting = { ClockTime = 19.5, Brightness = 2, FogEnd = 2500, FogColor = C(120, 130, 150) },
+	Bounds = { x1 = -50, x2 = 50, z1 = -50, z2 = 50, top = 110, floor = 0 },
+	Disasters = { "Tornado", "Lightning", "Meteors", "Flood", "Fire", "AcidRain" },
+	DisasterConfig = { Flood = { maxHeight = 46 } }, -- tsunami: inunda la cubierta, el modulo y el helipuerto quedan a salvo
 }
 
 local DECK = 30
@@ -695,6 +708,9 @@ local Skyscraper = {
 	Title = "Rascacielos",
 	Description = "Torre de 12 plantas con 3 ascensores, escalera de emergencia, helipuerto y piscina en la azotea.",
 	Lighting = { ClockTime = 17.5, Brightness = 2, OutdoorAmbient = C(120, 110, 130) },
+	Bounds = { x1 = -60, x2 = 60, z1 = -60, z2 = 100, top = 190, floor = 0 },
+	Disasters = { "Earthquake", "Fire", "Lightning", "AcidRain", "Tornado", "Lava" },
+	DisasterConfig = { Lava = { maxHeight = 112 } },
 }
 
 local STORY = 14
@@ -872,6 +888,8 @@ local SpaceStation = {
 	Title = "Estacion Espacial",
 	Description = "Nucleo de 4 plantas con ascensores, brazos con laboratorio, invernadero y hangar. Gravedad baja.",
 	Lighting = { ClockTime = 0, Brightness = 1, Ambient = C(60, 65, 90), OutdoorAmbient = C(40, 45, 70) },
+	Bounds = { x1 = -130, x2 = 130, z1 = -130, z2 = 130, top = 110, floor = 0 },
+	Disasters = { "Meteors", "Fire", "Earthquake", "Radiation" },
 	Gravity = 70,
 }
 
@@ -1674,13 +1692,643 @@ end
 return Util
 ]])
 
+add("ServerScriptService", { "IslasServer", "Disasters" }, "AcidRain", "ModuleScript", [[
+return {
+	Title = "Lluvia acida",
+	Description = "Llueve acido: quema a quien este a cielo abierto. ¡Ponte bajo techo!",
+	Run = function(ctx)
+		ctx.setLighting({ FogColor = Color3.fromRGB(90, 140, 60), FogEnd = 450, Brightness = 1 })
+		ctx.fx("tint", Color3.fromRGB(80, 200, 60), 0.86)
+		local dt = 0.5
+		while ctx.active() do
+			for _, entry in ipairs(ctx.players()) do
+				-- si hay algo encima (techo, cristal, balcon) estas a cubierto
+				local origin = entry.root.Position + Vector3.new(0, 2, 0)
+				local cover = workspace:Raycast(origin, Vector3.new(0, 400, 0), ctx.rayParams)
+				if not cover then
+					ctx.damage(entry, (ctx.config.dps or 7) * dt)
+				end
+			end
+			task.wait(dt)
+		end
+	end,
+}
+]])
+
+add("ServerScriptService", { "IslasServer", "Disasters" }, "Earthquake", "ModuleScript", [[
+local Debris = game:GetService("Debris")
+
+return {
+	Title = "Terremoto",
+	Description = "El suelo tiembla: se rompen paredes y objetos. Aleja de lo que pueda caerte encima.",
+	Run = function(ctx)
+		ctx.fx("shake", 1.4, ctx.duration)
+		local parts = table.clone(ctx.fragileParts())
+		local limit = math.floor(#parts * (ctx.config.maxBroken or 0.5))
+		local broken = 0
+		while ctx.active() do
+			if broken < limit then
+				local n = math.min(limit - broken, math.max(6, math.floor(#parts * 0.03)))
+				for _ = 1, n do
+					if #parts == 0 then
+						break
+					end
+					local p = table.remove(parts, math.random(#parts))
+					if p.Parent then
+						p.Anchored = false
+						p.AssemblyLinearVelocity = Vector3.new(math.random(-8, 8), math.random(0, 6), math.random(-8, 8))
+						Debris:AddItem(p, 30)
+						broken = broken + 1
+					end
+				end
+			end
+			-- el temblor tira al suelo a algunos jugadores
+			for _, entry in ipairs(ctx.players()) do
+				if math.random() < 0.15 then
+					entry.humanoid:ChangeState(Enum.HumanoidStateType.FallingDown)
+				end
+			end
+			task.wait(3)
+		end
+	end,
+}
+]])
+
+add("ServerScriptService", { "IslasServer", "Disasters" }, "Fire", "ModuleScript", [[
+local ZoneHazard = require(script.Parent.Parent.ZoneHazard)
+
+return {
+	Title = "Incendio",
+	Description = "Aparecen focos de fuego que se extienden. Huye de las llamas y sube o aléjate.",
+	Run = function(ctx)
+		ZoneHazard.run(ctx, {
+			color = Color3.fromRGB(255, 110, 30),
+			fire = true,
+			dps = 14,
+			startRadius = 5,
+			maxRadius = 24,
+			growth = 0.9,
+			interval = 7,
+			maxZones = 9,
+		})
+	end,
+}
+]])
+
+add("ServerScriptService", { "IslasServer", "Disasters" }, "Flood", "ModuleScript", [[
+local RisingLiquid = require(script.Parent.Parent.RisingLiquid)
+
+return {
+	Title = "Inundacion",
+	Description = "El agua sube sin parar. Busca un lugar alto: abajo te ahogas.",
+	Run = function(ctx)
+		RisingLiquid.run(ctx, {
+			name = "Inundacion",
+			color = Color3.fromRGB(40, 120, 200),
+			material = Enum.Material.SmoothPlastic,
+			transparency = 0.4,
+			maxHeight = 40,
+			lethal = false,
+			dps = 14,
+		})
+	end,
+}
+]])
+
+add("ServerScriptService", { "IslasServer", "Disasters" }, "Lava", "ModuleScript", [[
+local RisingLiquid = require(script.Parent.Parent.RisingLiquid)
+
+return {
+	Title = "Lava",
+	Description = "¡El suelo es lava! Sube: tocarla es morir al instante.",
+	Run = function(ctx)
+		RisingLiquid.run(ctx, {
+			name = "Lava",
+			color = Color3.fromRGB(255, 90, 20),
+			material = Enum.Material.Neon,
+			transparency = 0.1,
+			maxHeight = 40,
+			lethal = true,
+			dps = 0,
+		})
+	end,
+}
+]])
+
+add("ServerScriptService", { "IslasServer", "Disasters" }, "Lightning", "ModuleScript", [[
+local Debris = game:GetService("Debris")
+
+return {
+	Title = "Tormenta electrica",
+	Description = "Caen rayos. Un anillo amarillo avisa del impacto: no te quedes en el.",
+	Run = function(ctx)
+		local C, V = Color3.fromRGB, Vector3.new
+		local b = ctx.build
+		local radius = ctx.config.radius or 9
+		local damage = ctx.config.damage or 65
+		local interval = ctx.config.interval or 1.3
+		local warn = 1.2
+
+		ctx.setLighting({ Brightness = 0.6, FogEnd = 450, FogColor = C(55, 60, 75), Ambient = C(40, 40, 55) })
+
+		local function strike(x, z)
+			local y = ctx.groundY(x, z) or ctx.bounds.floor
+			local target = V(x, y, z)
+			local ring = b:Box("AvisoRayo", V(0.2, radius * 2, radius * 2), target + V(0, 0.2, 0), C(255, 235, 90), Enum.Material.Neon, {
+				shape = Enum.PartType.Cylinder,
+				rot = V(0, 0, 90),
+				transparency = 0.5,
+				canCollide = false,
+			})
+			task.delay(warn, function()
+				if ctx.stopped then
+					return
+				end
+				ring:Destroy()
+				local height = ctx.bounds.top + 150 - y
+				local bolt = b:Box("Rayo", V(1.2, height, 1.2), V(x, y + height / 2, z), C(235, 245, 255), Enum.Material.Neon, {
+					canCollide = false,
+				})
+				Debris:AddItem(bolt, 0.2)
+				ctx.fx("flash")
+				for _, entry in ipairs(ctx.players()) do
+					if (entry.root.Position - target).Magnitude <= radius then
+						ctx.damage(entry, damage)
+					end
+				end
+			end)
+		end
+
+		while ctx.active() do
+			local players = ctx.players()
+			local x, z
+			if #players > 0 and math.random() < 0.7 then
+				local p = players[math.random(#players)].root.Position
+				x = math.clamp(p.X + math.random(-8, 8), ctx.bounds.x1, ctx.bounds.x2)
+				z = math.clamp(p.Z + math.random(-8, 8), ctx.bounds.z1, ctx.bounds.z2)
+			else
+				x, z = ctx.randomPoint()
+			end
+			strike(x, z)
+			task.wait(math.max(0.45, interval - ctx.progress() * 0.7))
+		end
+	end,
+}
+]])
+
+add("ServerScriptService", { "IslasServer", "Disasters" }, "Meteors", "ModuleScript", [[
+local Debris = game:GetService("Debris")
+
+return {
+	Title = "Lluvia de meteoritos",
+	Description = "Caen meteoritos: un circulo rojo avisa donde van a impactar. ¡Sal de el!",
+	Run = function(ctx)
+		local Util = ctx.Util
+		local C, V = Color3.fromRGB, Vector3.new
+		local b = ctx.build
+		local radius = ctx.config.radius or 16
+		local damage = ctx.config.damage or 75
+		local interval = ctx.config.interval or 1.6
+		local fall = 1.8
+
+		local function strike(x, z)
+			local y = ctx.groundY(x, z) or ctx.bounds.floor
+			local target = V(x, y, z)
+			local marker = b:Box("Aviso", V(0.3, radius * 1.6, radius * 1.6), target + V(0, 0.3, 0), C(255, 60, 40), Enum.Material.Neon, {
+				shape = Enum.PartType.Cylinder,
+				rot = V(0, 0, 90),
+				transparency = 0.55,
+				canCollide = false,
+			})
+			local start = V(x + math.random(-60, 60), ctx.bounds.top + 120, z + math.random(-60, 60))
+			local meteor = b:Box("Meteoro", V(7, 7, 7), start, C(255, 120, 30), Enum.Material.Neon, {
+				shape = Enum.PartType.Ball,
+				canCollide = false,
+			})
+			Util.AddLight(meteor, 40, 3, C(255, 150, 60))
+			ctx.tween(meteor, fall, { Position = target + V(0, 3.5, 0) })
+
+			task.delay(fall, function()
+				if ctx.stopped then
+					return
+				end
+				meteor:Destroy()
+				marker:Destroy()
+				local boom = b:Box("Explosion", V(4, 4, 4), target + V(0, 3, 0), C(255, 170, 60), Enum.Material.Neon, {
+					shape = Enum.PartType.Ball,
+					transparency = 0.2,
+					canCollide = false,
+				})
+				local big = radius * 2.4
+				ctx.tween(boom, 0.5, { Size = V(big, big, big), Transparency = 1 })
+				Debris:AddItem(boom, 1)
+				for _, entry in ipairs(ctx.players()) do
+					local off = entry.root.Position - target
+					local d = off.Magnitude
+					if d <= radius then
+						ctx.damage(entry, damage * (1 - 0.6 * d / radius))
+						if d > 0.1 then
+							entry.root.AssemblyLinearVelocity = off.Unit * 60 + V(0, 40, 0)
+						end
+					end
+				end
+			end)
+		end
+
+		while ctx.active() do
+			local volley = 1 + math.floor(ctx.progress() * 2)
+			local players = ctx.players()
+			for _ = 1, volley do
+				local x, z
+				if #players > 0 and math.random() < 0.6 then
+					-- apuntan cerca de un jugador para que no se quede quieto
+					local p = players[math.random(#players)].root.Position
+					x = math.clamp(p.X + math.random(-18, 18), ctx.bounds.x1, ctx.bounds.x2)
+					z = math.clamp(p.Z + math.random(-18, 18), ctx.bounds.z1, ctx.bounds.z2)
+				else
+					x, z = ctx.randomPoint()
+				end
+				strike(x, z)
+			end
+			task.wait(math.max(0.5, interval - ctx.progress() * 0.9))
+		end
+	end,
+}
+]])
+
+add("ServerScriptService", { "IslasServer", "Disasters" }, "Radiation", "ModuleScript", [[
+local ZoneHazard = require(script.Parent.Parent.ZoneHazard)
+
+return {
+	Title = "Fuga de radiacion",
+	Description = "Nubes radiactivas verdes recorren la estación. No te quedes dentro.",
+	Run = function(ctx)
+		ZoneHazard.run(ctx, {
+			color = Color3.fromRGB(110, 255, 80),
+			fire = false,
+			dps = 11,
+			startRadius = 6,
+			maxRadius = 28,
+			growth = 1.1,
+			interval = 6,
+			maxZones = 8,
+		})
+	end,
+}
+]])
+
+add("ServerScriptService", { "IslasServer", "Disasters" }, "Tornado", "ModuleScript", [[
+return {
+	Title = "Tornado",
+	Description = "Un tornado recorre la isla y lo arrastra todo. Alejate de el.",
+	Run = function(ctx)
+		local C, V = Color3.fromRGB, Vector3.new
+		local b = ctx.build
+		local bb = ctx.bounds
+		local radius = ctx.config.radius or 42
+		local speed = ctx.config.speed or 11
+		local dt = 0.05
+		local LAYERS, LAYER_H = 8, 15
+
+		local px, pz = ctx.randomPoint()
+		local wx, wz = ctx.randomPoint()
+		local baseY = ctx.groundY(px, pz) or bb.floor
+
+		ctx.setLighting({ Brightness = 0.9, FogEnd = 700, FogColor = C(110, 110, 115) })
+
+		local layers = {}
+		for i = 1, LAYERS do
+			local d = 8 + i * 5
+			layers[i] = b:Box("Embudo", V(LAYER_H, d, d), V(px, baseY + (i - 0.5) * LAYER_H, pz), C(120, 120, 125), Enum.Material.SmoothPlastic, {
+				shape = Enum.PartType.Cylinder,
+				rot = V(0, 0, 90),
+				transparency = 0.55,
+				canCollide = false,
+			})
+		end
+		local debris = {}
+		for i = 1, 28 do
+			local part = b:Box("Escombro", V(2, 2, 2), V(px, baseY, pz), i % 2 == 0 and C(140, 100, 60) or C(150, 150, 155), Enum.Material.Wood, {
+				canCollide = false,
+			})
+			debris[i] = { part = part, a0 = math.random() * math.pi * 2, h = math.random() }
+		end
+
+		local fragile = ctx.fragileParts()
+		local tick = 0
+		while ctx.active() do
+			tick = tick + 1
+			-- movimiento hacia un punto de paso
+			local dx, dz = wx - px, wz - pz
+			local dist = math.sqrt(dx * dx + dz * dz)
+			if dist < 6 then
+				wx, wz = ctx.randomPoint()
+			else
+				px, pz = px + dx / dist * speed * dt, pz + dz / dist * speed * dt
+			end
+			if tick % 5 == 0 then
+				baseY = ctx.groundY(px, pz) or baseY
+			end
+
+			for i, l in ipairs(layers) do
+				l.Position = V(px, baseY + (i - 0.5) * LAYER_H, pz)
+			end
+			local t = ctx.time()
+			for _, d in ipairs(debris) do
+				local ang = d.a0 + t * (3.2 - d.h * 1.6)
+				local r = (6 + d.h * 30)
+				d.part.Position = V(px + math.cos(ang) * r, baseY + d.h * LAYERS * LAYER_H, pz + math.sin(ang) * r)
+			end
+
+			-- arrastra jugadores
+			for _, entry in ipairs(ctx.players()) do
+				local pos = entry.root.Position
+				local off = V(pos.X - px, 0, pos.Z - pz)
+				local d = off.Magnitude
+				if d < radius and pos.Y - baseY < LAYERS * LAYER_H + 20 then
+					local k = 1 - d / radius
+					local inward = d > 0.1 and off.Unit * -1 or V(0, 0, 0)
+					local tangent = d > 0.1 and V(-off.Z, 0, off.X).Unit or V(0, 0, 0)
+					entry.root.AssemblyLinearVelocity = tangent * (30 * k + 8) + inward * (14 * k) + V(0, 30 * k + 8, 0)
+					ctx.damage(entry, 5 * dt * k)
+				end
+			end
+
+			-- arranca piezas cercanas
+			if tick % 4 == 0 then
+				local freed = 0
+				for i = #fragile, 1, -1 do
+					local p = fragile[i]
+					if not p.Parent then
+						table.remove(fragile, i)
+					elseif p.Anchored then
+						local pp = p.Position
+						local ddx, ddz = pp.X - px, pp.Z - pz
+						if ddx * ddx + ddz * ddz < 30 * 30 and pp.Y - baseY < 40 then
+							p.Anchored = false
+							p.AssemblyLinearVelocity = V(-ddz * 0.8, 40, ddx * 0.8)
+							table.remove(fragile, i)
+							freed = freed + 1
+							if freed >= 3 then
+								break
+							end
+						end
+					end
+				end
+			end
+			task.wait(dt)
+		end
+	end,
+}
+]])
+
+add("ServerScriptService", { "IslasServer" }, "DisasterService", "ModuleScript", [[
+-- DisasterService: lanza un desastre en la isla actual.
+--   DisasterService.Start(MapService.GetCurrent(), duracion [, "Earthquake"])  -> { Name, Title, Description }
+--   DisasterService.Stop()                                                      -- limpia efectos y restaura la luz
+--
+-- Cada mapa dice que desastres admite (Disasters = {...}), sus limites (Bounds) y ajustes (DisasterConfig).
+-- Los desastres viven en IslasServer/Disasters: cada uno es un ModuleScript { Title, Description, Run(ctx) }.
+-- Run(ctx) se ejecuta en su propio hilo y debe hacer un bucle `while ctx.active() do ... end`.
+
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
+local ServerStorage = game:GetService("ServerStorage")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("IslasShared"):WaitForChild("Config"))
+local Util = require(ServerStorage:WaitForChild("IslasMapas"):WaitForChild("Lib"):WaitForChild("Util"))
+local DisasterFX = ReplicatedStorage:WaitForChild("IslasRemotes"):WaitForChild("DisasterFX")
+local Disasters = script.Parent:WaitForChild("Disasters")
+
+local DisasterService = {}
+
+local active = nil -- el contexto del desastre en curso
+
+function DisasterService.GetNames()
+	local names = {}
+	for _, child in ipairs(Disasters:GetChildren()) do
+		if child:IsA("ModuleScript") then
+			names[#names + 1] = child.Name
+		end
+	end
+	table.sort(names)
+	return names
+end
+
+function DisasterService.TitleOf(name)
+	local module = Disasters:FindFirstChild(name)
+	return module and require(module).Title or name
+end
+
+local function inElevator(part, root)
+	local p = part.Parent
+	while p and p ~= root do
+		if p.Name:match("_Cabina$") or p.Name:match("_Hueco$") then
+			return true
+		end
+		p = p.Parent
+	end
+	return false
+end
+
+local NOT_FRAGILE = { Isla = true, Mar = true, SpawnPoint = true, Roca = true }
+
+local function buildContext(current, duration, name)
+	local def = current.Def
+	local origin = Config.MapOrigin
+	local b = def.Bounds or { x1 = -100, x2 = 100, z1 = -100, z2 = 100, top = 100, floor = 0 }
+	local ctx = {
+		Util = Util,
+		name = name,
+		map = current,
+		duration = duration,
+		config = (def.DisasterConfig and def.DisasterConfig[name]) or {},
+		stopped = false,
+		startTime = workspace:GetServerTimeNow(),
+		bounds = {
+			x1 = origin.X + b.x1,
+			x2 = origin.X + b.x2,
+			z1 = origin.Z + b.z1,
+			z2 = origin.Z + b.z2,
+			top = origin.Y + (b.top or 100),
+			floor = origin.Y + (b.floor or 0),
+		},
+	}
+	ctx.endTime = ctx.startTime + duration
+
+	local folder = Instance.new("Folder")
+	folder.Name = "EfectosDesastre"
+	folder.Parent = workspace
+	ctx.folder = folder
+	ctx.build = Util.newBuilder(folder, Vector3.new(0, 0, 0)) -- posiciones en coordenadas de mundo
+
+	local stopCallbacks = {}
+	function ctx.onStop(fn)
+		stopCallbacks[#stopCallbacks + 1] = fn
+	end
+	ctx.stopCallbacks = stopCallbacks
+
+	function ctx.time()
+		return workspace:GetServerTimeNow()
+	end
+	function ctx.elapsed()
+		return workspace:GetServerTimeNow() - ctx.startTime
+	end
+	function ctx.progress()
+		return math.clamp(ctx.elapsed() / duration, 0, 1)
+	end
+	function ctx.active()
+		return not ctx.stopped and workspace:GetServerTimeNow() < ctx.endTime
+	end
+
+	-- Jugadores vivos que estan en la isla (los que esperan en el lobby no cuentan)
+	function ctx.players()
+		local list = {}
+		local bb = ctx.bounds
+		for _, p in ipairs(Players:GetPlayers()) do
+			local char = p.Character
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			local root = char and char:FindFirstChild("HumanoidRootPart")
+			if hum and root and hum.Health > 0 then
+				local pos = root.Position
+				if pos.X > bb.x1 - 60 and pos.X < bb.x2 + 60 and pos.Z > bb.z1 - 60 and pos.Z < bb.z2 + 60
+					and pos.Y > bb.floor - 80 and pos.Y < bb.top + 150 then
+					list[#list + 1] = { player = p, humanoid = hum, root = root }
+				end
+			end
+		end
+		return list
+	end
+
+	function ctx.damage(entry, amount)
+		if entry.humanoid.Health > 0 then
+			entry.humanoid:TakeDamage(amount)
+		end
+	end
+
+	function ctx.randomPoint()
+		local bb = ctx.bounds
+		return bb.x1 + math.random() * (bb.x2 - bb.x1), bb.z1 + math.random() * (bb.z2 - bb.z1)
+	end
+
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Include
+	rayParams.FilterDescendantsInstances = { current.Folder }
+	rayParams.RespectCanCollide = true
+	ctx.rayParams = rayParams
+
+	-- Altura de la superficie en (x, z) mirando desde el cielo (nil si no hay nada)
+	function ctx.groundY(x, z)
+		local bb = ctx.bounds
+		local hit = workspace:Raycast(Vector3.new(x, bb.top + 30, z), Vector3.new(0, -(bb.top - bb.floor + 200), 0), rayParams)
+		return hit and hit.Position.Y or nil
+	end
+
+	function ctx.fx(kind, ...)
+		DisasterFX:FireAllClients(kind, ...)
+	end
+
+	function ctx.tween(inst, seconds, goal)
+		TweenService:Create(inst, TweenInfo.new(seconds, Enum.EasingStyle.Linear), goal):Play()
+	end
+
+	-- Cambia la iluminacion y la restaura al parar
+	local savedLight = {}
+	function ctx.setLighting(props)
+		for prop, value in pairs(props) do
+			if savedLight[prop] == nil then
+				savedLight[prop] = Lighting[prop]
+			end
+			Lighting[prop] = value
+		end
+	end
+	ctx.onStop(function()
+		for prop, value in pairs(savedLight) do
+			Lighting[prop] = value
+		end
+	end)
+
+	-- Piezas pequenas que pueden romperse/salir volando (se calcula una vez)
+	local fragileCache
+	function ctx.fragileParts()
+		if fragileCache then
+			return fragileCache
+		end
+		fragileCache = {}
+		for _, d in ipairs(current.Folder:GetDescendants()) do
+			if d:IsA("Part") and d.Anchored and d.CanCollide and not NOT_FRAGILE[d.Name] then
+				local s = d.Size
+				if s.X * s.Y * s.Z < 450 and math.max(s.X, s.Y, s.Z) < 30 and not inElevator(d, current.Folder) then
+					fragileCache[#fragileCache + 1] = d
+				end
+			end
+		end
+		return fragileCache
+	end
+
+	return ctx
+end
+
+function DisasterService.Stop()
+	local ctx = active
+	if not ctx then
+		return
+	end
+	active = nil
+	ctx.stopped = true
+	for _, fn in ipairs(ctx.stopCallbacks) do
+		pcall(fn)
+	end
+	ctx.folder:Destroy()
+	DisasterFX:FireAllClients("clear")
+end
+
+function DisasterService.Start(current, duration, name)
+	DisasterService.Stop()
+	local def = current.Def
+	local options = def.Disasters or {}
+	if #options == 0 then
+		return nil
+	end
+	name = name or options[math.random(#options)]
+	local module = Disasters:FindFirstChild(name)
+	if not module then
+		warn("DisasterService: no existe el desastre '" .. tostring(name) .. "'")
+		return nil
+	end
+	local disaster = require(module)
+
+	local ctx = buildContext(current, duration, name)
+	active = ctx
+	ctx.fx("banner", disaster.Title, disaster.Description, Config.DisasterDelay)
+
+	task.spawn(function()
+		task.wait(Config.DisasterDelay)
+		if ctx.stopped then
+			return
+		end
+		local ok, err = pcall(disaster.Run, ctx)
+		if not ok then
+			warn("DisasterService: error en el desastre " .. name .. ": " .. tostring(err))
+		end
+	end)
+
+	return { Name = name, Title = disaster.Title, Description = disaster.Description }
+end
+
+return DisasterService
+]])
+
 add("ServerScriptService", { "IslasServer" }, "MapService", "ModuleScript", [[
 -- MapService: construye un mapa SOLO cuando se necesita, teletransporta jugadores y lo borra despues.
 -- Mientras un mapa no se ha votado no existe en el workspace, asi que no consume nada.
 --
 -- API:
 --   MapService.GetMapNames()            -> lista de nombres de mapas disponibles
---   MapService.GetInfo(name)            -> { Name, Title, Description }
+--   MapService.GetInfo(name)            -> { Name, Title, Description, Disasters }
+--   MapService.GetCurrent()             -> { Name, Folder, Spawns, Def } o nil
 --   MapService.Load(name)               -> construye el mapa (bloquea hasta terminar)
 --   MapService.TeleportToMap(players)   -> manda jugadores a los spawns del mapa cargado
 --   MapService.ReturnToLobby(players)   -> los devuelve al lobby
@@ -1726,7 +2374,12 @@ end
 
 function MapService.GetInfo(name)
 	local def = getBuilder(name)
-	return { Name = name, Title = def.Title or name, Description = def.Description or "" }
+	return {
+		Name = name,
+		Title = def.Title or name,
+		Description = def.Description or "",
+		Disasters = def.Disasters or {},
+	}
 end
 
 local function applyLighting(settings)
@@ -1791,7 +2444,7 @@ function MapService.Load(name)
 		workspace.Gravity = def.Gravity
 	end
 
-	current = { Name = name, Folder = folder, Spawns = b:Spawns() }
+	current = { Name = name, Folder = folder, Spawns = b:Spawns(), Def = def }
 	return folder
 end
 
@@ -1884,6 +2537,44 @@ end
 return MapService
 ]])
 
+add("ServerScriptService", { "IslasServer" }, "RisingLiquid", "ModuleScript", [[
+-- RisingLiquid: un liquido que sube desde el suelo de la isla (inundacion, lava).
+local RisingLiquid = {}
+
+-- opts: name, color, material, transparency, maxHeight, lethal (bool), dps
+function RisingLiquid.run(ctx, opts)
+	local b = ctx.bounds
+	local pad = 120
+	local cx, cz = (b.x1 + b.x2) / 2, (b.z1 + b.z2) / 2
+	local sx = math.min(2048, (b.x2 - b.x1) + pad * 2)
+	local sz = math.min(2048, (b.z2 - b.z1) + pad * 2)
+	local part = ctx.build:Box(opts.name, Vector3.new(sx, 1, sz), Vector3.new(cx, b.floor - 0.5, cz), opts.color, opts.material, {
+		transparency = opts.transparency,
+		canCollide = false,
+	})
+	local maxHeight = ctx.config.maxHeight or opts.maxHeight
+	local riseTime = ctx.duration * 0.85
+	local dt = 0.2
+
+	while ctx.active() do
+		local level = b.floor + maxHeight * math.min(1, ctx.elapsed() / riseTime)
+		part.Position = Vector3.new(cx, level - 0.5, cz)
+		for _, entry in ipairs(ctx.players()) do
+			if entry.root.Position.Y - 2.5 < level then
+				if opts.lethal then
+					entry.humanoid.Health = 0
+				else
+					ctx.damage(entry, opts.dps * dt)
+				end
+			end
+		end
+		task.wait(dt)
+	end
+end
+
+return RisingLiquid
+]])
+
 add("ServerScriptService", { "IslasServer" }, "RoundLoop", "Script", [[
 -- RoundLoop: bucle de rondas de ejemplo: espera -> votacion -> construye isla -> teletransporta -> ronda -> vuelta al lobby.
 -- Si ya tienes tu propio bucle, pon Config.RunDefaultLoop = false y llama a MapService / VoteService desde el tuyo.
@@ -1896,7 +2587,7 @@ local Config = require(ReplicatedStorage:WaitForChild("IslasShared"):WaitForChil
 -- Los RemoteEvents los crea el servidor antes de cargar los demas modulos
 local Remotes = Instance.new("Folder")
 Remotes.Name = "IslasRemotes"
-for _, name in ipairs({ "VoteOptions", "VoteUpdate", "VoteEnd", "CastVote", "RoundStatus" }) do
+for _, name in ipairs({ "VoteOptions", "VoteUpdate", "VoteEnd", "CastVote", "RoundStatus", "DisasterFX" }) do
 	local r = Instance.new("RemoteEvent")
 	r.Name = name
 	r.Parent = Remotes
@@ -1905,6 +2596,7 @@ Remotes.Parent = ReplicatedStorage
 
 local MapService = require(script.Parent.MapService)
 local VoteService = require(script.Parent.VoteService)
+local DisasterService = require(script.Parent.DisasterService)
 local RoundStatus = Remotes.RoundStatus
 
 if not Config.RunDefaultLoop then
@@ -1955,15 +2647,18 @@ while true do
 		local participants = Players:GetPlayers()
 		MapService.TeleportToMap(participants)
 
-		-- Ronda
+		-- Ronda (con un desastre al azar de los que admite el mapa)
 		local endTime = os.clock() + Config.RoundTime
-		status("Sobrevive en " .. title, Config.RoundTime)
+		local disaster = Config.EnableDisasters and DisasterService.Start(MapService.GetCurrent(), Config.RoundTime) or nil
+		status(disaster and ("Desastre: " .. disaster.Title) or ("Sobrevive en " .. title), Config.RoundTime)
 		while os.clock() < endTime and alivePlayers(participants) > 0 do
 			task.wait(0.5)
 		end
+		DisasterService.Stop()
+		local survivors = alivePlayers(participants)
 
 		-- Fin: vuelta al lobby y se borra la isla (el siguiente mapa no existe hasta votarlo)
-		status("Fin de la ronda")
+		status("Fin de la ronda: sobrevivieron " .. survivors .. " de " .. #participants)
 		MapService.ReturnToLobby(Players:GetPlayers())
 		task.wait(2)
 		MapService.Unload()
@@ -1980,6 +2675,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local MapService = require(script.Parent.MapService)
+local DisasterService = require(script.Parent.DisasterService)
 
 local Remotes = ReplicatedStorage:WaitForChild("IslasRemotes")
 local VoteOptions = Remotes:WaitForChild("VoteOptions") -- servidor -> clientes: {options, endTime}
@@ -2038,7 +2734,12 @@ function VoteService.Run(options, seconds)
 	local infos = {}
 	for _, name in ipairs(options) do
 		set[name] = true
-		infos[#infos + 1] = MapService.GetInfo(name)
+		local info = MapService.GetInfo(name)
+		info.DisasterTitles = {}
+		for _, d in ipairs(info.Disasters) do
+			info.DisasterTitles[#info.DisasterTitles + 1] = DisasterService.TitleOf(d)
+		end
+		infos[#infos + 1] = info
 	end
 	active = { set = set, list = options, votes = {} }
 
@@ -2065,6 +2766,186 @@ function VoteService.Run(options, seconds)
 end
 
 return VoteService
+]])
+
+add("ServerScriptService", { "IslasServer" }, "ZoneHazard", "ModuleScript", [[
+-- ZoneHazard: zonas peligrosas que aparecen, crecen y hacen dano a quien este dentro (fuego, radiacion...).
+local ZoneHazard = {}
+
+-- opts: color, fire (bool), dps, startRadius, maxRadius, growth (studs/s), interval (s entre zonas), maxZones
+function ZoneHazard.run(ctx, opts)
+	local Util = ctx.Util
+	local zones = {}
+	local lastSpawn = -math.huge
+	local dt = 0.25
+	local cfg = ctx.config
+	local maxZones = cfg.maxZones or opts.maxZones
+	local interval = cfg.interval or opts.interval
+
+	local function addZone()
+		local x, z
+		local list = ctx.players()
+		if #list > 0 and math.random() < 0.5 then
+			-- la mitad de las veces aparece cerca de un jugador
+			local p = list[math.random(#list)].root.Position
+			x = math.clamp(p.X + math.random(-30, 30), ctx.bounds.x1, ctx.bounds.x2)
+			z = math.clamp(p.Z + math.random(-30, 30), ctx.bounds.z1, ctx.bounds.z2)
+		else
+			x, z = ctx.randomPoint()
+		end
+		local y = ctx.groundY(x, z) or ctx.bounds.floor
+		local d = opts.startRadius * 2
+		local part = ctx.build:Box("Zona", Vector3.new(d, d, d), Vector3.new(x, y + 1, z), opts.color, Enum.Material.Neon, {
+			shape = Enum.PartType.Ball,
+			transparency = 0.45,
+			canCollide = false,
+		})
+		if opts.fire then
+			local f = Instance.new("Fire")
+			f.Size = 24
+			f.Heat = 12
+			f.Parent = part
+		end
+		Util.AddLight(part, 35, 2, opts.color)
+		zones[#zones + 1] = { pos = Vector3.new(x, y, z), radius = opts.startRadius, part = part }
+	end
+
+	while ctx.active() do
+		local now = ctx.time()
+		if #zones < maxZones and now - lastSpawn >= interval then
+			lastSpawn = now
+			addZone()
+		end
+		for _, z in ipairs(zones) do
+			z.radius = math.min(opts.maxRadius, z.radius + opts.growth * dt)
+			local d = z.radius * 2
+			z.part.Size = Vector3.new(d, d, d)
+		end
+		for _, entry in ipairs(ctx.players()) do
+			local pos = entry.root.Position
+			for _, z in ipairs(zones) do
+				if (pos - z.pos).Magnitude <= z.radius then
+					ctx.damage(entry, opts.dps * dt)
+					break
+				end
+			end
+		end
+		task.wait(dt)
+	end
+end
+
+return ZoneHazard
+]])
+
+add("StarterPlayerScripts", { "IslasClient" }, "DisasterGui", "LocalScript", [[
+-- DisasterGui: efectos de pantalla de los desastres (aviso, temblor, destello de rayo, tinte).
+-- Recibe del servidor: ("banner", titulo, descripcion, segundosHastaEmpezar), ("shake", intensidad, segundos),
+-- ("flash"), ("tint", color, transparencia) y ("clear").
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local DisasterFX = ReplicatedStorage:WaitForChild("IslasRemotes"):WaitForChild("DisasterFX")
+local player = Players.LocalPlayer
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "DesastresGui"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 5
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-- capa de color (lluvia acida, destellos)
+local overlay = Instance.new("Frame")
+overlay.Size = UDim2.fromScale(1, 1)
+overlay.BackgroundTransparency = 1
+overlay.BorderSizePixel = 0
+overlay.Active = false
+overlay.Parent = gui
+
+-- cartel de aviso
+local banner = Instance.new("Frame")
+banner.Size = UDim2.new(0, 520, 0, 110)
+banner.Position = UDim2.new(0.5, -260, 0, 70)
+banner.BackgroundColor3 = Color3.fromRGB(120, 20, 20)
+banner.BackgroundTransparency = 0.15
+banner.Visible = false
+banner.Parent = gui
+Instance.new("UICorner", banner).CornerRadius = UDim.new(0, 14)
+
+local bannerTitle = Instance.new("TextLabel")
+bannerTitle.Size = UDim2.new(1, -20, 0, 44)
+bannerTitle.Position = UDim2.new(0, 10, 0, 8)
+bannerTitle.BackgroundTransparency = 1
+bannerTitle.Font = Enum.Font.GothamBlack
+bannerTitle.TextSize = 32
+bannerTitle.TextColor3 = Color3.fromRGB(255, 230, 120)
+bannerTitle.Parent = banner
+
+local bannerDesc = Instance.new("TextLabel")
+bannerDesc.Size = UDim2.new(1, -24, 0, 50)
+bannerDesc.Position = UDim2.new(0, 12, 0, 52)
+bannerDesc.BackgroundTransparency = 1
+bannerDesc.Font = Enum.Font.GothamMedium
+bannerDesc.TextSize = 17
+bannerDesc.TextWrapped = true
+bannerDesc.TextColor3 = Color3.new(1, 1, 1)
+bannerDesc.Parent = banner
+
+local bannerToken = 0
+local function showBanner(title, desc, delay)
+	bannerToken = bannerToken + 1
+	local token = bannerToken
+	bannerTitle.Text = "¡" .. title .. "!"
+	bannerDesc.Text = desc .. (delay and delay > 0 and ("  (empieza en " .. delay .. "s)") or "")
+	banner.Visible = true
+	task.delay((delay or 0) + 6, function()
+		if token == bannerToken then
+			banner.Visible = false
+		end
+	end)
+end
+
+-- temblor de camara: mueve el offset de la camara del humanoide
+local shakeIntensity, shakeEnd = 0, 0
+RunService.RenderStepped:Connect(function()
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not hum then
+		return
+	end
+	if shakeIntensity > 0 and os.clock() < shakeEnd then
+		hum.CameraOffset = Vector3.new(
+			(math.random() - 0.5) * shakeIntensity,
+			(math.random() - 0.5) * shakeIntensity,
+			0
+		)
+	elseif hum.CameraOffset ~= Vector3.zero then
+		hum.CameraOffset = Vector3.zero
+		shakeIntensity = 0
+	end
+end)
+
+DisasterFX.OnClientEvent:Connect(function(kind, a, b, c)
+	if kind == "banner" then
+		showBanner(a, b, c)
+	elseif kind == "shake" then
+		shakeIntensity, shakeEnd = a, os.clock() + b
+	elseif kind == "flash" then
+		overlay.BackgroundColor3 = Color3.new(1, 1, 1)
+		overlay.BackgroundTransparency = 0.2
+		TweenService:Create(overlay, TweenInfo.new(0.35), { BackgroundTransparency = 1 }):Play()
+	elseif kind == "tint" then
+		overlay.BackgroundColor3 = a
+		overlay.BackgroundTransparency = b
+	elseif kind == "clear" then
+		shakeIntensity = 0
+		overlay.BackgroundTransparency = 1
+		banner.Visible = false
+	end
+end)
 ]])
 
 add("StarterPlayerScripts", { "IslasClient" }, "VoteGui", "LocalScript", [[
@@ -2182,7 +3063,7 @@ VoteOptions.OnClientEvent:Connect(function(infos, endTime)
 		name.Parent = btn
 
 		local desc = Instance.new("TextLabel")
-		desc.Size = UDim2.new(1, -14, 1, -90)
+		desc.Size = UDim2.new(1, -14, 0, 60)
 		desc.Position = UDim2.new(0, 7, 0, 44)
 		desc.BackgroundTransparency = 1
 		desc.Font = Enum.Font.Gotham
@@ -2192,6 +3073,18 @@ VoteOptions.OnClientEvent:Connect(function(infos, endTime)
 		desc.TextColor3 = Color3.fromRGB(200, 205, 220)
 		desc.Text = info.Description
 		desc.Parent = btn
+
+		local disasters = Instance.new("TextLabel")
+		disasters.Size = UDim2.new(1, -14, 0, 50)
+		disasters.Position = UDim2.new(0, 7, 0, 106)
+		disasters.BackgroundTransparency = 1
+		disasters.Font = Enum.Font.GothamMedium
+		disasters.TextSize = 12
+		disasters.TextWrapped = true
+		disasters.TextYAlignment = Enum.TextYAlignment.Top
+		disasters.TextColor3 = Color3.fromRGB(255, 160, 90)
+		disasters.Text = "Desastres: " .. table.concat(info.DisasterTitles or {}, ", ")
+		disasters.Parent = btn
 
 		local count = Instance.new("TextLabel")
 		count.Size = UDim2.new(1, 0, 0, 30)
@@ -2244,4 +3137,4 @@ RunService.Heartbeat:Connect(function()
 end)
 ]])
 
-print("Islas de Desastres instalado: 12 scripts. Dale a Play para probar.")
+print("Islas de Desastres instalado: 25 scripts. Dale a Play para probar.")

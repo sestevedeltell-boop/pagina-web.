@@ -11,6 +11,9 @@ local Skyscraper = {
 	Title = "Rascacielos",
 	Description = "Torre de 12 plantas con 3 ascensores, escalera de emergencia, helipuerto y piscina en la azotea.",
 	Lighting = { ClockTime = 17.5, Brightness = 2, OutdoorAmbient = C(120, 110, 130) },
+	Bounds = { x1 = -60, x2 = 60, z1 = -60, z2 = 100, top = 190, floor = 0 },
+	Disasters = { "Earthquake", "Fire", "Lightning", "AcidRain", "Tornado", "Lava" },
+	DisasterConfig = { Lava = { maxHeight = 112 } },
 }
 
 local STORY = 14

@@ -15,7 +15,14 @@ function Signal:Wait() end
 
 -- Vector3
 local V3 = {}
-V3.__index = V3
+V3.__index = function(t, k)
+	if k == "Magnitude" then return math.sqrt(t.X * t.X + t.Y * t.Y + t.Z * t.Z) end
+	if k == "Unit" then
+		local m = math.sqrt(t.X * t.X + t.Y * t.Y + t.Z * t.Z)
+		return setmetatable({ X = t.X / m, Y = t.Y / m, Z = t.Z / m }, V3)
+	end
+	return V3[k]
+end
 local function v3(x, y, z) return setmetatable({ X = x or 0, Y = y or 0, Z = z or 0 }, V3) end
 V3.__add = function(a, b) return v3(a.X + b.X, a.Y + b.Y, a.Z + b.Z) end
 V3.__sub = function(a, b) return v3(a.X - b.X, a.Y - b.Y, a.Z - b.Z) end
@@ -52,6 +59,7 @@ UDim2 = {
 	new = function(a, b, c, d) return { a, b, c, d } end,
 	fromScale = function(a, b) return { a, 0, b, 0 } end,
 }
+RaycastParams = { new = function() return {} end }
 TweenInfo = { new = function(t) return { Time = t } end }
 
 Enum = setmetatable({}, { __index = function(t, k)
@@ -70,7 +78,9 @@ local EVENTS = {
 local CLASS_PARTS = { Part = 1, TrussPart = 1, SpawnLocation = 1 }
 
 local function newInstance(class)
-	return setmetatable({ _p = { ClassName = class, Name = class }, _children = {}, _signals = {} }, Inst)
+	local o = setmetatable({ _p = { ClassName = class, Name = class }, _children = {}, _signals = {} }, Inst)
+	if class == "Part" then o._p.CanCollide = true end
+	return o
 end
 
 Inst.__index = function(t, k)
@@ -160,7 +170,13 @@ function methods.PivotTo(self, target)
 		end
 	end
 end
-function methods.GetServerTimeNow(self) return os.clock() end
+function methods.GetServerTimeNow(self) return VCLOCK end
+function methods.Raycast(self, origin, dir, params)
+	if dir.Y < 0 then return { Position = Vector3.new(origin.X, 1000, origin.Z) } end
+	return nil
+end
+function methods.TakeDamage(self, n) self.Health = math.max(0, self.Health - n) end
+function methods.ChangeState(self, s) end
 function methods.FireAllClients(self, ...) self.OnClientEvent:Fire(...) end
 function methods.FireClient(self, _, ...) self.OnClientEvent:Fire(...) end
 function methods.FireServer(self, ...) self.OnServerEvent:Fire(...) end
@@ -168,8 +184,10 @@ function methods.FireServer(self, ...) self.OnServerEvent:Fire(...) end
 Instance = { new = function(class) return newInstance(class) end }
 
 -- task
+VCLOCK = 0
+math.clamp = function(v, lo, hi) return math.max(lo, math.min(hi, v)) end
 task = {
-	wait = function() return 0 end,
+	wait = function(t) VCLOCK = VCLOCK + (t or 0.03) return t or 0.03 end,
 	spawn = function(f, ...)
 		local co = coroutine.create(f)
 		local ok, err = coroutine.resume(co, ...)
@@ -205,6 +223,7 @@ services.Players = {
 services.Lighting = { ClockTime = 12, Brightness = 1, Ambient = "a", OutdoorAmbient = "oa", FogColor = "fc", FogStart = 0, FogEnd = 100000 }
 services.ServerStorage = newInstance("ServerStorage")
 services.ReplicatedStorage = newInstance("ReplicatedStorage")
+services.Debris = { AddItem = function() end }
 services.RunService = { Heartbeat = Signal.new() }
 services.TweenService = {
 	Create = function(_, inst, _, goal)
@@ -258,15 +277,19 @@ function BuildTree()
 			end
 		end
 	end
-	-- fuente de los scripts del servidor (se prueban aparte)
+	-- scripts del servidor (con subcarpetas, p. ej. Disasters)
 	local serverFolder = newInstance("Folder")
 	serverFolder.Name = "IslasServer"
 	for path, source in pairs(FILES) do
 		if path:sub(1, 11) == "src/server/" then
+			local parts = {}
+			for seg in path:sub(12):gmatch("[^/]+") do parts[#parts + 1] = seg end
+			local parent = serverFolder
+			for i = 1, #parts - 1 do parent = ensureFolder(parent, parts[i]) end
 			local node = newInstance("ModuleScript")
-			node.Name = path:sub(12):gsub("%.server%.lua$", ""):gsub("%.lua$", "")
+			node.Name = parts[#parts]:gsub("%.server%.lua$", ""):gsub("%.lua$", "")
 			node.Source = source
-			node.Parent = serverFolder
+			node.Parent = parent
 		end
 	end
 	return serverFolder

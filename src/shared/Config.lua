@@ -11,6 +11,10 @@ return {
 	-- Cuantos mapas salen en la votacion
 	OptionsPerVote = 3,
 
+	-- Desastres: segundos de aviso tras llegar a la isla antes de que empiece, y si estan activados
+	EnableDisasters = true,
+	DisasterDelay = 10,
+
 	-- Minimo de jugadores para empezar una ronda
 	MinPlayers = 1,
 

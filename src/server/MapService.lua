@@ -3,7 +3,8 @@
 --
 -- API:
 --   MapService.GetMapNames()            -> lista de nombres de mapas disponibles
---   MapService.GetInfo(name)            -> { Name, Title, Description }
+--   MapService.GetInfo(name)            -> { Name, Title, Description, Disasters }
+--   MapService.GetCurrent()             -> { Name, Folder, Spawns, Def } o nil
 --   MapService.Load(name)               -> construye el mapa (bloquea hasta terminar)
 --   MapService.TeleportToMap(players)   -> manda jugadores a los spawns del mapa cargado
 --   MapService.ReturnToLobby(players)   -> los devuelve al lobby
@@ -49,7 +50,12 @@ end
 
 function MapService.GetInfo(name)
 	local def = getBuilder(name)
-	return { Name = name, Title = def.Title or name, Description = def.Description or "" }
+	return {
+		Name = name,
+		Title = def.Title or name,
+		Description = def.Description or "",
+		Disasters = def.Disasters or {},
+	}
 end
 
 local function applyLighting(settings)
@@ -114,7 +120,7 @@ function MapService.Load(name)
 		workspace.Gravity = def.Gravity
 	end
 
-	current = { Name = name, Folder = folder, Spawns = b:Spawns() }
+	current = { Name = name, Folder = folder, Spawns = b:Spawns(), Def = def }
 	return folder
 end
 

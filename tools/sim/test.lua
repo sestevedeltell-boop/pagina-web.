@@ -6,7 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 -- RemoteEvents que crea RoundLoop en el juego real
 local remotes = NewInstance("Folder")
 remotes.Name = "IslasRemotes"
-for _, n in ipairs({ "VoteOptions", "VoteUpdate", "VoteEnd", "CastVote", "RoundStatus" }) do
+for _, n in ipairs({ "VoteOptions", "VoteUpdate", "VoteEnd", "CastVote", "RoundStatus", "DisasterFX" }) do
 	local r = NewInstance("RemoteEvent")
 	r.Name = n
 	r.Parent = remotes
@@ -16,14 +16,10 @@ remotes.Parent = ReplicatedStorage
 local Config = require(ReplicatedStorage.IslasShared.Config)
 -- MapService y VoteService viven en ServerScriptService en el juego real
 local function serverModule(name) return InstMethods.FindFirstChild(serverFolder, name) end
-local serverScripts = NewInstance("Folder") -- hace de ServerScriptService.IslasServer
-local mapServiceNode, voteServiceNode = serverModule("MapService"), serverModule("VoteService")
-mapServiceNode.Parent = serverScripts
-voteServiceNode.Parent = serverScripts
+local MapService = require(serverModule("MapService"))
+local VoteService = require(serverModule("VoteService"))
+local DisasterService = require(serverModule("DisasterService"))
 local roundLoopNode = serverModule("RoundLoop")
-roundLoopNode.Parent = serverScripts
-local MapService = require(mapServiceNode)
-local VoteService = require(voteServiceNode)
 
 local failures = 0
 local function check(cond, msg)
@@ -137,6 +133,44 @@ for _, name in ipairs(names) do
 		local pos = pl.Character.PrimaryPart.Position
 		check(pos.X > Config.MapOrigin.X - 1000 and pos.X < Config.MapOrigin.X + 1000, name .. ": jugador no teletransportado a la isla (x=" .. pos.X .. ")")
 	end
+	-- ===== Desastres =====
+	local lightingBefore = game:GetService("Lighting").Brightness
+	check(#(cur.Def.Disasters or {}) >= 3, name .. ": deberia tener al menos 3 desastres")
+	FAKE_PLAYERS = fake
+	for _, pl in ipairs(fake) do
+		local hum = NewInstance("Humanoid")
+		hum.Health = 100
+		hum.Parent = pl.Character
+	end
+	for _, dn in ipairs(cur.Def.Disasters or {}) do
+		for _, pl in ipairs(fake) do InstMethods.FindFirstChildOfClass(pl.Character, "Humanoid").Health = 100 end
+		local info = DisasterService.Start(cur, 180, dn)
+		check(info and info.Name == dn, name .. ": no arranco el desastre " .. dn)
+		local fxFolder = workspace:FindFirstChild("EfectosDesastre")
+		local fxParts = fxFolder and #InstMethods.GetDescendants(fxFolder) or 0
+		local hurt = false
+		for _, pl in ipairs(fake) do
+			if InstMethods.FindFirstChildOfClass(pl.Character, "Humanoid").Health < 100 then hurt = true end
+		end
+		local freed = 0
+		if dn == "Earthquake" then
+			for _, d in ipairs(InstMethods.GetDescendants(cur.Folder)) do
+				if d._p.ClassName == "Part" and d._p.Anchored == false then freed = freed + 1 end
+			end
+			check(freed > 5, name .. "/" .. dn .. ": no rompio piezas")
+		elseif dn ~= "AcidRain" then
+			check(fxParts > 0, name .. "/" .. dn .. ": no creo efectos")
+		end
+		if dn == "Flood" or dn == "Lava" or dn == "AcidRain" then
+			check(hurt, name .. "/" .. dn .. ": no hizo dano a nadie")
+		end
+		DisasterService.Stop()
+		check(workspace:FindFirstChild("EfectosDesastre") == nil, name .. "/" .. dn .. ": no limpio los efectos")
+		check(game:GetService("Lighting").Brightness == lightingBefore, name .. "/" .. dn .. ": no restauro la luz")
+		print(string.format("  desastre %-10s ok (efectos=%d, rotas=%d, dano=%s)", dn, fxParts, freed, tostring(hurt)))
+	end
+	FAKE_PLAYERS = {}
+
 	MapService.ReturnToLobby(fake)
 	for _, pl in ipairs(fake) do
 		local pos = pl.Character.PrimaryPart.Position

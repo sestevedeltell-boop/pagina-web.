@@ -6,6 +6,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local MapService = require(script.Parent.MapService)
+local DisasterService = require(script.Parent.DisasterService)
 
 local Remotes = ReplicatedStorage:WaitForChild("IslasRemotes")
 local VoteOptions = Remotes:WaitForChild("VoteOptions") -- servidor -> clientes: {options, endTime}
@@ -64,7 +65,12 @@ function VoteService.Run(options, seconds)
 	local infos = {}
 	for _, name in ipairs(options) do
 		set[name] = true
-		infos[#infos + 1] = MapService.GetInfo(name)
+		local info = MapService.GetInfo(name)
+		info.DisasterTitles = {}
+		for _, d in ipairs(info.Disasters) do
+			info.DisasterTitles[#info.DisasterTitles + 1] = DisasterService.TitleOf(d)
+		end
+		infos[#infos + 1] = info
 	end
 	active = { set = set, list = options, votes = {} }
 

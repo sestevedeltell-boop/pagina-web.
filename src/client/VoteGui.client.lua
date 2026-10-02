@@ -112,7 +112,7 @@ VoteOptions.OnClientEvent:Connect(function(infos, endTime)
 		name.Parent = btn
 
 		local desc = Instance.new("TextLabel")
-		desc.Size = UDim2.new(1, -14, 1, -90)
+		desc.Size = UDim2.new(1, -14, 0, 60)
 		desc.Position = UDim2.new(0, 7, 0, 44)
 		desc.BackgroundTransparency = 1
 		desc.Font = Enum.Font.Gotham
@@ -122,6 +122,18 @@ VoteOptions.OnClientEvent:Connect(function(infos, endTime)
 		desc.TextColor3 = Color3.fromRGB(200, 205, 220)
 		desc.Text = info.Description
 		desc.Parent = btn
+
+		local disasters = Instance.new("TextLabel")
+		disasters.Size = UDim2.new(1, -14, 0, 50)
+		disasters.Position = UDim2.new(0, 7, 0, 106)
+		disasters.BackgroundTransparency = 1
+		disasters.Font = Enum.Font.GothamMedium
+		disasters.TextSize = 12
+		disasters.TextWrapped = true
+		disasters.TextYAlignment = Enum.TextYAlignment.Top
+		disasters.TextColor3 = Color3.fromRGB(255, 160, 90)
+		disasters.Text = "Desastres: " .. table.concat(info.DisasterTitles or {}, ", ")
+		disasters.Parent = btn
 
 		local count = Instance.new("TextLabel")
 		count.Size = UDim2.new(1, 0, 0, 30)

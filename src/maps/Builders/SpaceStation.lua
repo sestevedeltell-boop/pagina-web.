@@ -12,6 +12,8 @@ local SpaceStation = {
 	Title = "Estacion Espacial",
 	Description = "Nucleo de 4 plantas con ascensores, brazos con laboratorio, invernadero y hangar. Gravedad baja.",
 	Lighting = { ClockTime = 0, Brightness = 1, Ambient = C(60, 65, 90), OutdoorAmbient = C(40, 45, 70) },
+	Bounds = { x1 = -130, x2 = 130, z1 = -130, z2 = 130, top = 110, floor = 0 },
+	Disasters = { "Meteors", "Fire", "Earthquake", "Radiation" },
 	Gravity = 70,
 }
 
