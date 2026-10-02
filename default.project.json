@@ -1,0 +1,25 @@
+{
+  "name": "IslasDeDesastres",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "IslasShared": { "$path": "src/shared" }
+    },
+    "ServerStorage": {
+      "$className": "ServerStorage",
+      "IslasMapas": { "$path": "src/maps" }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "IslasServer": { "$path": "src/server" }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "IslasClient": { "$path": "src/client" }
+      }
+    }
+  }
+}

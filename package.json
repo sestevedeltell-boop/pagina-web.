@@ -1,0 +1,12 @@
+{
+  "name": "islas-de-desastres",
+  "private": true,
+  "description": "Islas/mundos para un juego de desastres de Roblox: carga bajo demanda, votacion y ascensores",
+  "scripts": {
+    "test": "node tools/sim/run.js",
+    "installer": "node tools/build_installer.js"
+  },
+  "devDependencies": {
+    "fengari": "^0.1.4"
+  }
+}
