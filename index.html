@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UNIKAL Arquitectura</title>
+<meta name="description" content="UNIKAL Arquitectura · Diseño Interior. Más de 25 años creando espacios con alma: arquitectura, interiorismo y construcción.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans+Condensed:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap">
+<style>
+/* Layout: una casa 3D fijada en pantalla que se despieza con el scroll, después capítulos editoriales en blanco con el amarillo de marca como único acento. */
+:root{
+  --paper:#ffffff;
+  --stone:#f4f2ee;
+  --ink:#151513;
+  --muted:#6d6a63;
+  --line:#e7e3db;
+  --gold:#fbb321;
+  --gold-deep:#d8920b;
+  --night:#0f0f0e;
+  --display:"Fira Sans Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --gutter:clamp(16px,4vw,56px);
+  --max:1240px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+img{max-width:100%;display:block}
+a{color:inherit}
+h1,h2,h3{font-family:var(--display);font-weight:500;line-height:1.05;letter-spacing:-.01em;text-wrap:balance;margin:0}
+p{margin:0}
+:focus-visible{outline:2px solid var(--gold-deep);outline-offset:3px}
+.wrap{max-width:var(--max);margin:0 auto;padding-inline:var(--gutter)}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.32em;text-transform:uppercase;color:var(--gold-deep)}
+.lead{color:var(--muted);font-size:17px;max-width:62ch}
+
+/* ---------- Cabecera ---------- */
+.top{position:fixed;inset:0 0 auto 0;z-index:50;padding-top:env(safe-area-inset-top,0px);transition:background .4s,box-shadow .4s}
+.top.solid{background:rgba(255,255,255,.92);backdrop-filter:blur(10px);box-shadow:0 1px 0 var(--line)}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;height:76px;gap:24px}
+.logo{display:flex;flex-direction:column;text-decoration:none;color:var(--ink);line-height:1}
+.logo-word{font-family:var(--display);font-weight:300;font-size:34px;letter-spacing:.14em;display:flex;align-items:center}
+.logo-ka{display:inline-flex;align-items:center;justify-content:center;background:var(--ink);color:var(--paper);font-weight:500;letter-spacing:-.06em;padding:0 .08em 0 .02em;margin:0 .14em 0 0;height:.92em;font-size:1em}
+.logo-sub{font-size:7.5px;letter-spacing:.42em;text-transform:uppercase;margin-top:5px;color:var(--ink)}
+.nav{display:flex;align-items:center;gap:30px}
+.nav a{text-decoration:none;font-size:14px;font-weight:500}
+.nav a:hover{color:var(--gold-deep)}
+.nav .cta{background:var(--gold);padding:10px 18px;color:var(--gold-ink,#1a1405)}
+.nav .cta:hover{background:var(--ink);color:var(--paper)}
+.menu-btn{display:none;background:none;border:0;font:inherit;font-weight:600;font-size:14px;cursor:pointer;padding:8px}
+@media (max-width:860px){
+  .nav{position:fixed;inset:76px 0 auto 0;flex-direction:column;align-items:flex-start;gap:0;background:var(--paper);padding:8px var(--gutter) 24px;box-shadow:0 12px 30px rgba(0,0,0,.08);display:none}
+  .nav.open{display:flex}
+  .nav a{padding:12px 0;font-size:17px;width:100%;border-bottom:1px solid var(--line)}
+  .nav .cta{margin-top:14px;width:auto;border:0;padding:12px 20px}
+  .menu-btn{display:block}
+}
+
+/* ---------- Escena 3D ---------- */
+.house{height:720vh;position:relative;background:#eef1f2}
+.stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden}
+#scene{position:absolute;inset:0;width:100%;height:100%;display:block}
+.progress{position:absolute;left:0;top:0;height:3px;background:var(--gold);width:0;z-index:5}
+.hero-copy{position:absolute;left:var(--gutter);top:22vh;max-width:620px;z-index:4;pointer-events:none}
+.hero-copy h1{font-size:clamp(46px,8vw,104px);font-weight:600;text-transform:uppercase;letter-spacing:-.015em}
+.hero-copy p{margin-top:18px;font-size:clamp(16px,1.6vw,19px);color:#3c3a36;max-width:44ch}
+.hero-copy .btn{pointer-events:auto;margin-top:28px}
+.btn{display:inline-flex;align-items:center;gap:10px;background:var(--gold);color:#1a1405;text-decoration:none;font-weight:600;font-size:15px;padding:16px 28px;border:0;cursor:pointer;transition:background .25s,color .25s}
+.btn:hover{background:var(--ink);color:var(--paper)}
+.btn.ghost{background:transparent;border:1px solid currentColor}
+.btn.ghost:hover{background:var(--paper);color:var(--ink)}
+.scroll-hint{position:absolute;left:50%;bottom:28px;transform:translateX(-50%);font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:#4a4842;display:flex;flex-direction:column;align-items:center;gap:10px;z-index:4}
+.scroll-hint i{width:1px;height:42px;background:linear-gradient(var(--ink),transparent);animation:drip 1.8s infinite}
+@keyframes drip{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+.outro-copy{position:absolute;right:var(--gutter);top:20vh;text-align:right;z-index:4;opacity:0;pointer-events:none;max-width:520px}
+.outro-copy h2{font-size:clamp(36px,5vw,68px)}
+.outro-copy p{color:#3c3a36;margin-top:12px}
+.chapter{position:absolute;left:var(--gutter);bottom:28px;z-index:4;font-family:var(--display);font-size:15px;letter-spacing:.06em;color:#3c3a36;display:flex;gap:12px;align-items:baseline}
+.chapter b{font-size:34px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+
+#lines{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none}
+#lines line{stroke:var(--ink);stroke-width:1}
+#lines circle.dot{fill:var(--gold);stroke:var(--ink);stroke-width:1.5}
+#lines circle.halo{fill:none;stroke:var(--gold);stroke-width:1.5}
+.callout{position:absolute;z-index:4;width:min(300px,34vw);background:rgba(255,255,255,.94);backdrop-filter:blur(6px);padding:18px 20px 20px;box-shadow:0 18px 40px rgba(20,20,18,.12);opacity:0;pointer-events:none;will-change:transform,opacity}
+.callout small{display:block;font-size:11px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:var(--gold-deep);margin-bottom:6px}
+.callout h3{font-size:26px;font-weight:500}
+.callout p{font-size:14px;color:var(--muted);margin-top:8px;line-height:1.5}
+@media (max-width:760px){
+  .callout{width:auto;left:16px!important;right:16px!important;top:auto!important;bottom:150px}
+  .hero-copy{top:15vh}
+  .outro-copy{left:var(--gutter);text-align:left;top:14vh}
+  .chapter{display:none}
+}
+
+/* ---------- Dato destacado (abajo a la derecha) ---------- */
+.fact{position:fixed;right:20px;bottom:calc(96px + env(safe-area-inset-bottom,0px));z-index:40;width:260px;background:var(--ink);color:var(--paper);padding:18px 20px;box-shadow:0 20px 50px rgba(0,0,0,.25);transform:translateY(20px);opacity:0;transition:transform .6s cubic-bezier(.2,.7,.2,1),opacity .6s}
+.fact.show{transform:none;opacity:1}
+.fact-k{font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#bdb7aa;display:flex;justify-content:space-between}
+.fact-body{margin-top:8px;display:flex;align-items:baseline;gap:12px;min-height:58px}
+.fact-n{font-family:var(--display);font-size:44px;font-weight:600;line-height:1;color:var(--gold);white-space:nowrap}
+.fact-t{font-size:13.5px;line-height:1.35}
+.fact-body.swap{animation:swap .7s cubic-bezier(.2,.7,.2,1)}
+@keyframes swap{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.fact-bar{height:2px;background:rgba(255,255,255,.15);margin-top:14px;overflow:hidden}
+.fact-bar i{display:block;height:100%;background:var(--gold);width:0}
+.fact-bar i.run{animation:bar 5s linear forwards}
+@keyframes bar{to{width:100%}}
+.wa{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:41;width:60px;height:60px;border-radius:50%;background:#25d366;display:grid;place-items:center;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:transform .25s}
+.wa:hover{transform:scale(1.07)}
+.wa svg{width:32px;height:32px;fill:#fff}
+@media (max-width:760px){.fact{width:auto;left:16px;right:88px;bottom:calc(20px + env(safe-area-inset-bottom,0px));padding:12px 14px}.fact-n{font-size:30px}.fact-body{min-height:40px;margin-top:4px}.fact-t{font-size:12.5px}}
+
+/* ---------- Animaciones de entrada ---------- */
+.js .rv{opacity:0;transform:translateY(40px);transition:opacity 1s cubic-bezier(.2,.7,.2,1),transform 1s cubic-bezier(.2,.7,.2,1)}
+.js .rv.in{opacity:1;transform:none}
+.js .rv-img{clip-path:inset(18% 0 18% 0);transition:clip-path 1.3s cubic-bezier(.2,.7,.2,1)}
+.js .rv-img.in{clip-path:inset(0 0 0 0)}
+.js .rv-img img{transform:scale(1.15);transition:transform 1.6s cubic-bezier(.2,.7,.2,1)}
+.js .rv-img.in img{transform:scale(1)}
+@media (prefers-reduced-motion:reduce){.js .rv,.js .rv-img,.js .rv-img img{opacity:1!important;transform:none!important;clip-path:none!important;transition:none!important}.scroll-hint i{animation:none}}
+
+/* ---------- Nosotros ---------- */
+section{position:relative}
+.about{padding-block:clamp(80px,12vw,160px)}
+.about-grid{display:grid;grid-template-columns:1.05fr 1fr;gap:clamp(32px,6vw,96px);align-items:center}
+.about h2{font-size:clamp(42px,6vw,76px);margin-top:16px}
+.about h2 em{font-style:normal;color:var(--gold-deep)}
+.about .lead{margin-top:24px}
+.about .lead + .lead{margin-top:14px}
+.services{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:44px;border-top:1px solid var(--line);padding-top:28px}
+.service svg{width:52px;height:52px;stroke:var(--ink);fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.service b{display:block;margin-top:12px;font-size:14px;font-weight:600}
+.service span{display:block;font-size:13px;color:var(--muted);margin-top:4px;line-height:1.45}
+.about-media{position:relative}
+.about-media .rv-img{aspect-ratio:1/1;overflow:hidden;max-width:100%}
+.about-media img{width:100%;height:100%;object-fit:cover}
+.badge25{position:absolute;left:-28px;bottom:-28px;background:var(--gold);padding:22px 26px;font-family:var(--display);line-height:1}
+.badge25 b{font-size:64px;font-weight:600;display:block}
+.badge25 span{font-size:14px;letter-spacing:.08em;text-transform:uppercase}
+@media (max-width:860px){.about-grid{grid-template-columns:1fr}.badge25{left:12px;bottom:-24px}.services{grid-template-columns:1fr 1fr 1fr}}
+@media (max-width:480px){.services{grid-template-columns:1fr;gap:22px}.service{display:grid;grid-template-columns:52px 1fr;gap:4px 16px;align-items:center}.service svg{grid-row:span 2}.service b{margin-top:0}}
+
+/* ---------- Banda oscura ---------- */
+.band{background:var(--night);color:var(--paper);overflow:hidden;padding-block:clamp(90px,12vw,150px)}
+.band-bg{position:absolute;inset:-20% 0;opacity:.35}
+.band-bg img{width:100%;height:100%;object-fit:cover}
+.band .wrap{position:relative}
+.band h2{font-size:clamp(40px,6vw,80px);max-width:14ch}
+.band .lead{color:#cfcac0;margin-top:20px}
+.values{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(20px,3vw,40px);margin-top:64px}
+.value{border-top:1px solid rgba(255,255,255,.25);padding-top:22px}
+.value svg{width:28px;height:28px;stroke:var(--gold);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.value h3{font-size:24px;margin-top:14px}
+.value p{color:#cfcac0;font-size:14.5px;margin-top:10px}
+@media (max-width:760px){.values{grid-template-columns:1fr}}
+
+/* ---------- Proyectos destacados ---------- */
+.projects{padding-block:clamp(80px,10vw,140px) 40px;background:var(--stone)}
+.sec-head{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-bottom:56px}
+.sec-head h2{font-size:clamp(40px,6vw,76px);margin-top:14px}
+.sec-head .lead{max-width:44ch}
+.stack{display:grid;gap:40px;padding-bottom:80px}
+.card{position:sticky;top:96px;background:var(--paper);display:grid;grid-template-columns:1.35fr 1fr;min-height:min(78vh,640px);box-shadow:0 -10px 40px rgba(20,20,18,.06);transform-origin:center top;will-change:transform}
+.card-media{position:relative;overflow:hidden;min-height:320px}
+.card-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform 1.2s cubic-bezier(.2,.7,.2,1)}
+.card:hover .card-media img{transform:scale(1.04)}
+.card-body{padding:clamp(24px,3.5vw,48px);display:flex;flex-direction:column;gap:18px;min-width:0}
+.card-top{display:flex;justify-content:space-between;align-items:center;font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted)}
+.tag{background:var(--ink);color:var(--paper);padding:5px 10px;letter-spacing:.2em}
+.card h3{font-size:clamp(32px,3.6vw,48px)}
+.card p{color:var(--muted)}
+.feats{list-style:none;margin:0;padding:0;display:grid;gap:0;border-top:1px solid var(--line)}
+.feats li{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid var(--line);font-size:14.5px}
+.feats li span{color:var(--muted);text-align:right}
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:auto}
+.thumbs img{aspect-ratio:4/3;object-fit:cover;width:100%}
+@media (max-width:860px){.card{grid-template-columns:1fr;position:relative;top:auto;min-height:0}.card-media{aspect-ratio:4/3;min-height:0}}
+
+/* ---------- Galería ---------- */
+.gallery{padding-block:clamp(80px,10vw,140px)}
+.masonry{columns:3 280px;column-gap:14px}
+.masonry figure{margin:0 0 14px;break-inside:avoid;overflow:hidden;position:relative}
+.masonry img{width:100%}
+.masonry figcaption{position:absolute;left:0;right:0;bottom:0;padding:28px 16px 12px;color:#fff;font-size:13px;font-weight:500;background:linear-gradient(transparent,rgba(0,0,0,.55));opacity:0;transform:translateY(8px);transition:.4s}
+.masonry figure:hover figcaption{opacity:1;transform:none}
+
+/* ---------- Alma ---------- */
+.soul{padding-block:0 clamp(80px,10vw,140px)}
+.soul-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(32px,6vw,96px);align-items:center}
+.soul-media{aspect-ratio:4/5;overflow:hidden}
+.soul-media img{width:100%;height:100%;object-fit:cover}
+.soul h2{font-size:clamp(38px,5vw,64px)}
+.soul .lead{margin-top:20px}
+.quote{font-family:var(--display);font-size:clamp(22px,2.4vw,30px);line-height:1.25;margin-top:36px;padding-top:24px;border-top:1px solid var(--line)}
+@media (max-width:860px){.soul-grid{grid-template-columns:1fr}}
+
+/* ---------- Blog ---------- */
+.blog{background:var(--stone);padding-block:clamp(80px,10vw,140px)}
+.posts{display:grid;grid-template-columns:repeat(4,1fr);gap:24px}
+.post{background:var(--paper);display:flex;flex-direction:column;min-width:0}
+.post-img{aspect-ratio:4/3;overflow:hidden}
+.post-img img{width:100%;height:100%;object-fit:cover;transition:transform 1s}
+.post:hover .post-img img{transform:scale(1.06)}
+.post-body{padding:20px 20px 24px;display:flex;flex-direction:column;gap:10px}
+.post time{font-size:12px;color:var(--muted);font-style:italic}
+.post h3{font-size:22px}
+.post p{font-size:14px;color:var(--muted)}
+@media (max-width:1060px){.posts{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.posts{grid-template-columns:1fr}}
+
+/* ---------- Contacto ---------- */
+.contact{padding-block:clamp(80px,10vw,140px)}
+.contact-box{background:var(--gold);padding:clamp(32px,6vw,80px);display:grid;grid-template-columns:1.2fr 1fr;gap:40px;align-items:end}
+.contact h2{font-size:clamp(42px,6.5vw,88px);color:#1a1405}
+.contact .lead{color:#3d2c05;margin-top:18px}
+.contact-list{display:grid;gap:18px}
+.contact-row{border-top:1px solid rgba(26,20,5,.25);padding-top:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.contact-row small{display:block;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#5a4209}
+.contact-row strong{font-family:var(--display);font-size:clamp(24px,2.6vw,34px);font-weight:500;color:#1a1405;user-select:all;word-break:break-word}
+.copy{background:#1a1405;color:var(--gold);border:0;font:inherit;font-size:12px;font-weight:600;padding:8px 12px;cursor:pointer}
+.contact-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+.contact-actions .btn{background:#1a1405;color:var(--gold)}
+.contact-actions .btn:hover{background:var(--paper);color:#1a1405}
+@media (max-width:860px){.contact-box{grid-template-columns:1fr}}
+
+/* ---------- Pie ---------- */
+footer{background:var(--night);color:#d8d4cb;padding-block:56px calc(40px + env(safe-area-inset-bottom,0px))}
+.eu{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;font-size:12px;color:#bdb7aa;padding-bottom:40px;border-bottom:1px solid rgba(255,255,255,.12);text-align:center}
+.eu span b{display:block;color:#fff;font-weight:600}
+.foot{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:32px;padding-top:44px}
+.foot .logo{color:#fff}
+.foot .logo-ka{background:#fff;color:var(--night)}
+.foot .logo-sub{color:#fff}
+.foot h4{margin:0 0 12px;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#fff}
+.foot a,.foot p{display:block;font-size:14px;text-decoration:none;color:#bdb7aa;margin-bottom:6px}
+.foot a:hover{color:var(--gold)}
+@media (max-width:760px){.foot{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<header class="top" id="top">
+  <div class="wrap">
+    <a class="logo" href="#inicio" aria-label="UNIKAL inicio">
+      <span class="logo-word">UNI<span class="logo-ka">KA</span>L</span>
+      <span class="logo-sub">Arquitectura · Diseño interior</span>
+    </a>
+    <button class="menu-btn" id="menuBtn" aria-expanded="false" aria-controls="nav">Menú</button>
+    <nav class="nav" id="nav">
+      <a href="#inicio">Inicio</a>
+      <a href="#nosotros">Nosotros</a>
+      <a href="#proyectos">Proyectos</a>
+      <a href="#blog">Blog</a>
+      <a class="cta" href="#contacto">Contacto</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ========== CASA 3D ========== -->
+<section class="house" id="inicio">
+  <div class="stage">
+    <canvas id="scene" aria-label="Casa moderna en 3D con piscina, jacuzzi y jardín que se despieza al hacer scroll"></canvas>
+    <div class="progress" id="progress"></div>
+    <svg id="lines" aria-hidden="true"></svg>
+
+    <div class="hero-copy" id="heroCopy">
+      <span class="eyebrow">UNIKAL · Arquitectura · Diseño interior</span>
+      <h1>Espacios<br>con alma.</h1>
+      <p>Fusionamos innovación y diseño para dar vida a espacios únicos, personalizados y adaptados a cada cliente.</p>
+      <a class="btn" href="#proyectos">Ver proyectos</a>
+    </div>
+
+    <div class="outro-copy" id="outroCopy">
+      <span class="eyebrow">Diseño a medida</span>
+      <h2>Cada detalle, pensado para vivirlo.</h2>
+      <p>Así diseñamos una casa en UNIKAL: de la cubierta al jardín.</p>
+    </div>
+
+    <div class="chapter" id="chapter"><b id="chapterN">00</b><span id="chapterT">La casa</span></div>
+    <div class="scroll-hint" id="scrollHint">Desliza<i></i></div>
+    <div id="callouts"></div>
+  </div>
+</section>
+
+<!-- ========== NOSOTROS ========== -->
+<section class="about" id="nosotros">
+  <div class="wrap about-grid">
+    <div>
+      <span class="eyebrow rv">Nosotros</span>
+      <h2 class="rv">Más de <em>25 años</em> de experiencia</h2>
+      <p class="lead rv">Gracias a nuestra amplia experiencia hemos desarrollado proyectos exclusivos que reflejan la identidad de cada cliente, priorizando funcionalidad, estética y sostenibilidad.</p>
+      <p class="lead rv">En UNIKAL transformamos vuestras ideas en espacios que inspiran y mejoran la calidad de vida.</p>
+      <div class="services">
+        <div class="service rv">
+          <svg viewBox="0 0 52 52"><path d="M6 46h40M10 46V26l10-8 10 8v20M30 46V20l8-7 8 7v26"/><path d="M15 34h10v12M34 28h6v6h-6zM16 26h8"/></svg>
+          <b>Arquitectura</b><span>Viviendas unifamiliares y proyectos a medida.</span>
+        </div>
+        <div class="service rv">
+          <svg viewBox="0 0 52 52"><rect x="12" y="6" width="28" height="40"/><path d="M26 6v40M6 46h40M20 16l-3 6M33 18l-3 6M23 27h-2M31 27h-2"/></svg>
+          <b>Diseño de interiores</b><span>Mobiliario, materiales e iluminación.</span>
+        </div>
+        <div class="service rv">
+          <svg viewBox="0 0 52 52"><path d="M14 8l-6 16h12zM14 24v8M11 32h6v12h-6zM34 6h6v38h-6zM37 6v-2M34 16h6M34 26h6"/></svg>
+          <b>Construcción</b><span>Ejecución de obra y reformas integrales.</span>
+        </div>
+      </div>
+    </div>
+    <div class="about-media">
+      <div class="rv-img"><img src="assets/img/villa-piscina.webp" alt="Villa blanca moderna con piscina, tarima de madera y césped" loading="lazy"></div>
+      <div class="badge25 rv"><b>+25</b><span>años diseñando hogares</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== TRANSFORMANDO IDEAS ========== -->
+<section class="band">
+  <div class="band-bg" id="bandBg"><img src="assets/img/porche-jardin.webp" alt="" loading="lazy"></div>
+  <div class="wrap">
+    <span class="eyebrow rv">Nuestra forma de trabajar</span>
+    <h2 class="rv">Transformando ideas en realidad</h2>
+    <p class="lead rv">En UNIKAL convertimos tus sueños en espacios funcionales y hermosos. Con diseño personalizado y enfoque sostenible, creamos ambientes que inspiran y mejoran tu vida.</p>
+    <div class="values">
+      <div class="value rv">
+        <svg viewBox="0 0 28 28"><path d="M14 3a8 8 0 0 0-5 14.2V21h10v-3.8A8 8 0 0 0 14 3zM10 25h8"/></svg>
+        <h3>Creatividad</h3>
+        <p>Fusionamos creatividad y funcionalidad para transformar espacios en lugares únicos que reflejen la personalidad de cada cliente.</p>
+      </div>
+      <div class="value rv">
+        <svg viewBox="0 0 28 28"><circle cx="14" cy="14" r="11"/><path d="M14 7v7l5 3"/></svg>
+        <h3>Experiencia</h3>
+        <p>Con más de 25 años de experiencia, hemos desarrollado proyectos exclusivos que priorizan estética, funcionalidad y sostenibilidad.</p>
+      </div>
+      <div class="value rv">
+        <svg viewBox="0 0 28 28"><path d="M3 14s4-7 11-7 11 7 11 7-4 7-11 7S3 14 3 14z"/><circle cx="14" cy="14" r="3.5"/></svg>
+        <h3>Escucha</h3>
+        <p>Escuchamos tus ideas y las convertimos en espacios que inspiran, mejoran tu calidad de vida y superan expectativas.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== PROYECTOS DESTACADOS ========== -->
+<section class="projects" id="proyectos">
+  <div class="wrap">
+    <div class="sec-head">
+      <div>
+        <span class="eyebrow rv">Proyectos destacados</span>
+        <h2 class="rv">Casas y apartamentos<br>con firma UNIKAL</h2>
+      </div>
+      <p class="lead rv">Una selección de nuestros trabajos más recientes en arquitectura, interiorismo y construcción.</p>
+    </div>
+
+    <div class="stack" id="stack">
+      <article class="card">
+        <div class="card-media"><img src="assets/img/villa-piscina.webp" alt="Villa moderna con piscina y palmeras" loading="lazy"></div>
+        <div class="card-body">
+          <div class="card-top"><span class="tag">Casa</span><span>01 / 04</span></div>
+          <h3>Villa con piscina y porche</h3>
+          <p>Vivienda unifamiliar de dos plantas con volúmenes blancos, grandes ventanales y un jardín pensado para vivir fuera.</p>
+          <ul class="feats">
+            <li>Salón<span>Doble altura con escalera volada</span></li>
+            <li>Exterior<span>Piscina con tarima de madera</span></li>
+            <li>Porche<span>Cocina exterior y zona chill-out</span></li>
+            <li>Jardín<span>Césped y palmeras</span></li>
+          </ul>
+          <div class="thumbs">
+            <img src="assets/img/porche-jardin.webp" alt="Porche con sofás junto al jardín" loading="lazy">
+            <img src="assets/img/doble-altura.webp" alt="Salón a doble altura con escalera" loading="lazy">
+            <img src="assets/img/salon-cocina.webp" alt="Salón abierto a la cocina" loading="lazy">
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-media"><img src="assets/img/vistas-mar.webp" alt="Salón con vistas al mar al atardecer" loading="lazy"></div>
+        <div class="card-body">
+          <div class="card-top"><span class="tag">Apartamento</span><span>02 / 04</span></div>
+          <h3>Apartamento frente al mar</h3>
+          <p>Interiorismo cálido y luminoso que pone las vistas en el centro de la vivienda.</p>
+          <ul class="feats">
+            <li>Vistas<span>Ventanal de suelo a techo</span></li>
+            <li>Salón<span>Mesa de mármol verde</span></li>
+            <li>Iluminación<span>Lámparas colgantes de vidrio</span></li>
+            <li>Cocina<span>Abierta con barra</span></li>
+          </ul>
+          <div class="thumbs">
+            <img src="assets/img/salon-marmol.webp" alt="Salón blanco con mesa de mármol verde" loading="lazy">
+            <img src="assets/img/cocina-isla.webp" alt="Cocina blanca con isla" loading="lazy">
+            <img src="assets/img/bano.webp" alt="Baño con mueble de lamas de madera" loading="lazy">
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-media"><img src="assets/img/salon-blanco.webp" alt="Salón blanco con pared de mármol oscuro" loading="lazy"></div>
+        <div class="card-body">
+          <div class="card-top"><span class="tag">Casa</span><span>03 / 04</span></div>
+          <h3>Vivienda contemporánea</h3>
+          <p>Espacios abiertos, materiales nobles y una iluminación indirecta que dibuja cada estancia.</p>
+          <ul class="feats">
+            <li>Techos<span>Iluminación LED indirecta</span></li>
+            <li>Revestimiento<span>Paredes de mármol</span></li>
+            <li>Comedor<span>Mesa de madera maciza</span></li>
+            <li>Dormitorio<span>Panel de madera y lámparas suspendidas</span></li>
+          </ul>
+          <div class="thumbs">
+            <img src="assets/img/comedor-led.webp" alt="Comedor con techo iluminado" loading="lazy">
+            <img src="assets/img/dormitorio.webp" alt="Dormitorio con cabecero de madera" loading="lazy">
+            <img src="assets/img/pasillo-madera.webp" alt="Pasillo con estanterías de madera" loading="lazy">
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-media"><img src="assets/img/comedor-madera.webp" alt="Cocina abierta con comedor y suelo de madera" loading="lazy"></div>
+        <div class="card-body">
+          <div class="card-top"><span class="tag">Apartamento</span><span>04 / 04</span></div>
+          <h3>Reforma integral de interiores</h3>
+          <p>Cocinas a medida, maderas naturales y soluciones de almacenaje integradas.</p>
+          <ul class="feats">
+            <li>Cocina<span>Muebles sin tiradores</span></li>
+            <li>Suelos<span>Madera natural</span></li>
+            <li>Encimeras<span>Piedra y porcelánico</span></li>
+            <li>Almacenaje<span>Armarios integrados</span></li>
+          </ul>
+          <div class="thumbs">
+            <img src="assets/img/cocina-blanca.webp" alt="Cocina blanca con encimera de piedra" loading="lazy">
+            <img src="assets/img/cocina-azul.webp" alt="Cocina azul con mesa de vidrio" loading="lazy">
+            <img src="assets/img/salon-cocina.webp" alt="Salón con cocina abierta" loading="lazy">
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ========== GALERÍA ========== -->
+<section class="gallery">
+  <div class="wrap">
+    <div class="sec-head">
+      <div>
+        <span class="eyebrow rv">Galería</span>
+        <h2 class="rv">Descubre nuestros proyectos más recientes</h2>
+      </div>
+    </div>
+    <div class="masonry">
+      <figure class="rv-img"><img src="assets/img/salon-marmol.webp" alt="Salón con mesa de mármol verde" loading="lazy"><figcaption>Salón a doble altura</figcaption></figure>
+      <figure class="rv-img"><img src="assets/img/comedor-led.webp" alt="Comedor con techo iluminado" loading="lazy"><figcaption>Comedor con luz indirecta</figcaption></figure>
+      <figure class="rv-img"><img src="assets/img/doble-altura.webp" alt="Salón visto desde la escalera" loading="lazy"><figcaption>Escalera volada</figcaption></figure>
+      <figure class="rv-img"><img src="assets/img/vistas-mar.webp" alt="Cocina frente al mar" loading="lazy"><figcaption>Vistas al Mediterráneo</figcaption></figure>
+      <figure class="rv-img"><img src="assets/img/cocina-azul.webp" alt="Cocina azul" loading="lazy"><figcaption>Cocina en azul marino</figcaption></figure>
+      <figure class="rv-img"><img src="assets/img/dormitorio.webp" alt="Dormitorio" loading="lazy"><figcaption>Dormitorio principal</figcaption></figure>
+      <figure class="rv-img"><img src="assets/img/comedor-madera.webp" alt="Comedor con suelo de madera" loading="lazy"><figcaption>Cocina y comedor</figcaption></figure>
+      <figure class="rv-img"><img src="assets/img/salon-cocina.webp" alt="Salón con cocina abierta" loading="lazy"><figcaption>Espacio abierto</figcaption></figure>
+      <figure class="rv-img"><img src="assets/img/pasillo-madera.webp" alt="Pasillo con madera" loading="lazy"><figcaption>Madera natural</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ========== ALMA ========== -->
+<section class="soul">
+  <div class="wrap soul-grid">
+    <div class="soul-media rv-img"><img src="assets/img/salon-marmol.webp" alt="Salón luminoso con sofá blanco" loading="lazy"></div>
+    <div>
+      <span class="eyebrow rv">Filosofía</span>
+      <h2 class="rv">Espacios con alma donde el diseño cobra vida</h2>
+      <p class="lead rv">En UNIKAL creemos que cada espacio tiene un alma. Combinamos innovación, diseño y sostenibilidad para crear ambientes únicos que cuentan historias.</p>
+      <p class="lead rv" style="margin-top:14px">Nuestro enfoque personalizado y la atención al detalle garantizan que cada proyecto refleje la esencia de nuestros clientes, transformando sus ideas en realidades que inspiran y perduran en el tiempo.</p>
+      <p class="quote rv">«Creemos que la arquitectura del futuro será más inteligente, sostenible y humana.»</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== BLOG ========== -->
+<section class="blog" id="blog">
+  <div class="wrap">
+    <div class="sec-head">
+      <div>
+        <span class="eyebrow rv">Blog</span>
+        <h2 class="rv">Noticias del sector</h2>
+      </div>
+      <p class="lead rv">Descubre las últimas tendencias en arquitectura e interiorismo con los proyectos más inspiradores.</p>
+    </div>
+    <div class="posts">
+      <article class="post rv">
+        <div class="post-img"><img src="assets/img/bano.webp" alt="Baño con materiales naturales" loading="lazy"></div>
+        <div class="post-body">
+          <time datetime="2025-03-06">6 de marzo de 2025</time>
+          <h3>Materiales sostenibles que están revolucionando la arquitectura moderna</h3>
+          <p>Madera laminada cruzada (CLT), hormigón reciclado, bambú, bioplásticos y corcho: soluciones bellas y respetuosas con el medio ambiente.</p>
+        </div>
+      </article>
+      <article class="post rv">
+        <div class="post-img"><img src="assets/img/villa-piscina.webp" alt="Casa moderna" loading="lazy"></div>
+        <div class="post-body">
+          <time datetime="2025-03-06">6 de marzo de 2025</time>
+          <h3>La arquitectura modular gana protagonismo en proyectos sostenibles y eficientes</h3>
+          <p>Construcción más rápida, costes controlados y menos residuos, sin renunciar al diseño.</p>
+        </div>
+      </article>
+      <article class="post rv">
+        <div class="post-img"><img src="assets/img/cocina-blanca.webp" alt="Cocina moderna" loading="lazy"></div>
+        <div class="post-body">
+          <time datetime="2025-03-06">6 de marzo de 2025</time>
+          <h3>Las casas modulares se imponen como tendencia</h3>
+          <p>Hogares eficientes y personalizables, con paneles solares y recogida de agua de lluvia. En UNIKAL ya hemos desarrollado varios.</p>
+        </div>
+      </article>
+      <article class="post rv">
+        <div class="post-img"><img src="assets/img/doble-altura.webp" alt="Salón a doble altura" loading="lazy"></div>
+        <div class="post-body">
+          <time datetime="2025-03-06">6 de marzo de 2025</time>
+          <h3>Nuevas tendencias: tecnología, sostenibilidad y diseño</h3>
+          <p>Modelado 3D, realidad virtual y domótica para espacios más cómodos y eficientes energéticamente.</p>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ========== CONTACTO ========== -->
+<section class="contact" id="contacto">
+  <div class="wrap">
+    <div class="contact-box rv">
+      <div>
+        <span class="eyebrow" style="color:#5a4209">Contacto</span>
+        <h2>¡Llámanos!</h2>
+        <p class="lead">Cuéntanos tu idea. Te ayudamos a convertirla en un espacio único, de la primera línea del proyecto a la entrega de llaves.</p>
+        <div class="contact-actions">
+          <a class="btn" href="https://wa.me/34644993711" target="_blank" rel="noopener">Escríbenos por WhatsApp</a>
+        </div>
+      </div>
+      <div class="contact-list">
+        <div class="contact-row"><div><small>Teléfono</small><strong>+34 644 99 37 11</strong></div><button class="copy" data-copy="+34644993711">Copiar</button></div>
+        <div class="contact-row"><div><small>Email</small><strong>estudio@unikalhome.com</strong></div><button class="copy" data-copy="estudio@unikalhome.com">Copiar</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="eu"><span><b>Financiado por la Unión Europea</b>NextGenerationEU</span><span><b>Gobierno de España</b>Plan de Recuperación, Transformación y Resiliencia</span></div>
+    <div class="foot">
+      <div>
+        <a class="logo" href="#inicio"><span class="logo-word">UNI<span class="logo-ka">KA</span>L</span><span class="logo-sub">Arquitectura · Diseño interior</span></a>
+      </div>
+      <div><h4>Secciones</h4><a href="#nosotros">Nosotros</a><a href="#proyectos">Proyectos</a><a href="#blog">Blog</a><a href="#contacto">Contacto</a></div>
+      <div><h4>Contacto</h4><p>+34 644 99 37 11</p><p>estudio@unikalhome.com</p></div>
+      <div><h4>Avisos legales</h4><p>Aviso legal</p><p>Política de privacidad</p><p>Política de cookies</p><p>Declaración de accesibilidad</p></div>
+    </div>
+  </div>
+</footer>
+
+<!-- Dato destacado + WhatsApp -->
+<aside class="fact" id="fact" aria-live="polite">
+  <div class="fact-k"><span>UNIKAL</span><span id="factIdx">01</span></div>
+  <div class="fact-body" id="factBody"><span class="fact-n" id="factN">+25</span><span class="fact-t" id="factT">años de experiencia</span></div>
+  <div class="fact-bar"><i id="factBar"></i></div>
+</aside>
+<a class="wa" href="https://wa.me/34644993711" target="_blank" rel="noopener" aria-label="Escribir por WhatsApp">
+  <svg viewBox="0 0 32 32"><path d="M16 3a13 13 0 0 0-11.2 19.6L3 29l6.6-1.7A13 13 0 1 0 16 3zm0 23.6a10.6 10.6 0 0 1-5.4-1.5l-.4-.2-3.9 1 1-3.8-.2-.4A10.6 10.6 0 1 1 16 26.6zm5.8-7.9c-.3-.2-1.9-.9-2.2-1s-.5-.2-.7.2-.8 1-1 1.2-.4.2-.7.1a8.7 8.7 0 0 1-4.3-3.8c-.3-.6.3-.5 1-1.7.1-.2 0-.4 0-.5l-1-2.4c-.3-.6-.5-.5-.7-.5h-.6a1.2 1.2 0 0 0-.9.4 3.6 3.6 0 0 0-1.1 2.7 6.3 6.3 0 0 0 1.3 3.3 14.4 14.4 0 0 0 5.5 4.9c2 .9 2.8 1 3.9.8a3.3 3.3 0 0 0 2.1-1.5 2.7 2.7 0 0 0 .2-1.5c-.1-.2-.3-.3-.6-.4z"/></svg>
+</a>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+document.documentElement.classList.add('js');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const ss=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
+
+/* ---------- Menú ---------- */
+const menuBtn=document.getElementById('menuBtn'),nav=document.getElementById('nav'),top_=document.getElementById('top');
+menuBtn.addEventListener('click',()=>{const o=nav.classList.toggle('open');menuBtn.setAttribute('aria-expanded',o)});
+nav.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{nav.classList.remove('open');menuBtn.setAttribute('aria-expanded',false)}));
+
+/* ---------- Copiar ---------- */
+document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click',()=>{
+  const t=b.dataset.copy;
+  const done=()=>{b.textContent='Copiado';setTimeout(()=>b.textContent='Copiar',1600)};
+  if(navigator.clipboard){navigator.clipboard.writeText(t).then(done,()=>{selectText(b)})}else selectText(b);
+}));
+function selectText(b){const s=b.parentElement.querySelector('strong');const r=document.createRange();r.selectNodeContents(s);const sel=getSelection();sel.removeAllRanges();sel.addRange(r)}
+
+/* ---------- Animaciones de entrada ---------- */
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.15,rootMargin:'0px 0px -6% 0px'});
+document.querySelectorAll('.rv,.rv-img').forEach((el,i)=>{el.style.transitionDelay=(el.classList.contains('rv')?(i%4)*0.08:0)+'s';io.observe(el)});
+
+/* ---------- Datos destacados (abajo a la derecha) ---------- */
+const facts=[
+  ['+25','años de experiencia en arquitectura y diseño'],
+  ['3','disciplinas: arquitectura, interiorismo y construcción'],
+  ['100%','proyectos personalizados para cada cliente'],
+  ['Eco','materiales sostenibles y eficiencia energética'],
+  ['3D','modelado y realidad virtual antes de construir'],
+  ['Llave','en mano: del proyecto a la obra terminada'],
+  ['Tel.','644 99 37 11 · estudio@unikalhome.com'],
+];
+const factEl=document.getElementById('fact'),factBody=document.getElementById('factBody'),factN=document.getElementById('factN'),factT=document.getElementById('factT'),factIdx=document.getElementById('factIdx'),factBar=document.getElementById('factBar');
+let fi=0,factTimer=null;
+function showFact(i){
+  fi=(i+facts.length)%facts.length;
+  factN.textContent=facts[fi][0];factT.textContent=facts[fi][1];factIdx.textContent=String(fi+1).padStart(2,'0')+' / '+String(facts.length).padStart(2,'0');
+  factBody.classList.remove('swap');void factBody.offsetWidth;factBody.classList.add('swap');
+  factBar.classList.remove('run');void factBar.offsetWidth;factBar.classList.add('run');
+  clearTimeout(factTimer);factTimer=setTimeout(()=>showFact(fi+1),5000);
+}
+setTimeout(()=>{factEl.classList.add('show');showFact(0)},1400);
+let lastSection=-1;
+function factOnScroll(){
+  const s=Math.floor(scrollY/(innerHeight*1.4));
+  if(s!==lastSection){if(lastSection!==-1)showFact(fi+1);lastSection=s}
+}
+
+/* ---------- Escena 3D ---------- */
+const canvas=document.getElementById('scene');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.NoToneMapping;
+const scene=new THREE.Scene();
+const SKY=0xeef1f2;
+scene.background=new THREE.Color(SKY);
+scene.fog=new THREE.Fog(SKY,70,150);
+const camera=new THREE.PerspectiveCamera(32,1,0.1,400);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0xb7c79c,0.62));
+const sun=new THREE.DirectionalLight(0xfff1dc,1.25);
+sun.position.set(20,32,18);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-26,right:26,top:26,bottom:-26,near:1,far:90});
+sun.shadow.bias=-0.0006;sun.shadow.normalBias=0.02;
+scene.add(sun);
+
+const M=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.85,metalness:0},o));
+const mat={
+  white:M(0xf8f7f3),stone:M(0xd8cfbf,{roughness:.95}),dark:M(0x26282a,{roughness:.45,metalness:.3}),
+  glass:M(0x7fa4b6,{roughness:.05,metalness:.7,transparent:true,opacity:.5}),
+  wood:M(0x5e2d18,{roughness:.7}),floor:M(0xc59c6c,{roughness:.6}),lawn:M(0x4f8f2e,{roughness:1}),
+  ground:M(0xe8e4dc,{roughness:1}),hedge:M(0x4c7f37),leaf:M(0x3f7a35,{side:THREE.DoubleSide}),trunk:M(0x8a7458),
+  water:M(0x14b4d4,{roughness:.08,metalness:.15,emissive:0x0a7d90,emissiveIntensity:.35,transparent:true,opacity:.92}),
+  spa:M(0x5fe0ec,{roughness:.1,metalness:.1,emissive:0x0b8a9c,emissiveIntensity:.4}),
+  panel:M(0x1b2a44,{roughness:.25,metalness:.6}),sofa:M(0x8d8a86),cushion:M(0xffffff),
+  pipe:M(0xff6a2b,{emissive:0xff4a10,emissiveIntensity:1.2,transparent:true,opacity:0}),
+  led:M(0xffffff,{emissive:0x9ff6ff,emissiveIntensity:1}),
+  bubble:M(0xffffff,{transparent:true,opacity:.85,roughness:.2}),
+};
+function box(w,h,d,m,x,y,z,parent,shadow=true){
+  const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);b.position.set(x,y,z);
+  b.castShadow=shadow;b.receiveShadow=true;parent.add(b);return b;
+}
+const anchor=(parent,x,y,z)=>{const o=new THREE.Object3D();o.position.set(x,y,z);parent.add(o);return o};
+
+const world=new THREE.Group();scene.add(world);
+// Suelo y parcela
+const g0=new THREE.Mesh(new THREE.PlaneGeometry(400,400),mat.ground);g0.rotation.x=-Math.PI/2;g0.receiveShadow=true;world.add(g0);
+box(32,0.1,24,mat.lawn,1,0.05,0,world,false);
+// Valla de lamas al fondo
+for(let i=0;i<64;i++)box(0.12,1.8,0.12,mat.dark,-15+i*0.5,0.95,-11.8,world);
+box(32,0.12,0.12,mat.dark,1,1.8,-11.8,world);
+box(30,1.2,0.8,mat.hedge,1,0.65,-11,world);
+for(let i=0;i<5;i++)box(0.9,0.9,0.9,mat.hedge,12,0.5,-8+i*1.8,world);
+
+// --- Base (losa + suelo radiante) ---
+const base=new THREE.Group();world.add(base);
+box(12.6,0.3,6.6,mat.stone,-1,0.15,-3,base);
+box(9.6,0.03,5.6,mat.floor,-2.4,0.31,-3,base,false);
+const radiant=new THREE.Group();base.add(radiant);
+for(let i=0;i<10;i++){
+  box(9,0.05,0.07,mat.pipe,-2.4,0.36,-5.5+i*0.55,radiant,false);
+  if(i<9){const x=(i%2===0)?2.05:-6.85;box(0.07,0.05,0.62,mat.pipe,x,0.36,-5.5+i*0.55+0.275,radiant,false)}
+}
+// Mobiliario interior
+box(3.2,0.45,1,mat.sofa,-3.5,0.55,-4.6,base);box(1,0.45,2.2,mat.sofa,-5.6,0.55,-4,base);
+box(3.2,0.4,0.3,mat.sofa,-3.5,0.95,-5.05,base);
+box(1.4,0.35,0.8,mat.dark,-3.3,0.5,-3.1,base);
+box(2.4,0.75,1,mat.white,0.3,0.68,-4.8,base);// isla de cocina
+const aRadiant=anchor(base,-4.5,0.4,-1.2);
+
+// --- Planta baja (muros y vidrio) ---
+const ground=new THREE.Group();world.add(ground);
+box(12,3.2,0.3,mat.white,-1,1.9,-6.15,ground);
+box(0.3,3.2,6,mat.white,-6.85,1.9,-3,ground);
+box(3,3.2,6.3,mat.stone,3.5,1.9,-3,ground);
+box(9.7,3,0.06,mat.glass,-2.2,1.8,-0.15,ground,false);
+for(let i=0;i<5;i++)box(0.08,3,0.12,mat.dark,-6.7+i*2.4,1.8,-0.12,ground);
+box(9.7,0.1,0.14,mat.dark,-2.2,3.3,-0.12,ground);
+box(0.2,3.1,0.2,mat.dark,-7.6,1.75,1.3,ground);box(0.2,3.1,0.2,mat.dark,5.6,1.75,1.3,ground);
+const aStone=anchor(ground,4.4,2.2,0.2);
+
+// --- Planta alta en voladizo ---
+const upper=new THREE.Group();world.add(upper);
+box(14,0.45,8.2,mat.white,-1,3.45,-2.6,upper);
+box(14,0.5,8.2,mat.white,-1,6.45,-2.6,upper);
+box(0.45,2.6,8.2,mat.white,-7.78,4.95,-2.6,upper);box(0.45,2.6,8.2,mat.white,5.78,4.95,-2.6,upper);
+box(13,2.6,0.3,mat.white,-1,4.95,-6.5,upper);
+box(13,2.5,0.06,mat.glass,-1,4.95,-0.6,upper,false);
+for(let i=0;i<6;i++)box(0.07,2.5,0.1,mat.dark,-7+i*2.4,4.95,-0.58,upper);
+box(13,1.05,0.05,mat.glass,-1,4.2,1.45,upper,false);
+box(5.5,0.5,0.9,mat.sofa,-2,3.95,-4.6,upper);box(2.2,0.6,2.4,mat.white,3,3.95,-4,upper);
+const aCanti=anchor(upper,-7,4.3,1.4);
+const aSmart=anchor(upper,1.5,5,-0.6);
+
+// --- Cubierta con placas solares ---
+const roof=new THREE.Group();world.add(roof);
+box(14.6,0.3,8.6,mat.white,-1,6.85,-2.6,roof);
+box(14.6,0.4,0.15,mat.white,-1,7.2,1.6,roof);
+for(let r=0;r<2;r++)for(let c=0;c<5;c++){
+  const p=box(1.9,0.06,1.2,mat.panel,-6+c*2.2,7.35,-5.4+r*1.6,roof);p.rotation.x=-0.28;
+}
+box(2.4,1,2.4,mat.white,3.6,7.5,-4,roof);// casetón
+const aRoof=anchor(roof,-1.6,7.5,-4.6);
+
+// --- Tarima, piscina y jacuzzi ---
+const outdoor=new THREE.Group();world.add(outdoor);
+// tarima alrededor del vaso (x -5..9, z 1.7..8.7) con hueco para la piscina (x -2..8, z 3.2..7.2)
+box(14,0.14,1.5,mat.wood,2,0.07,7.95,outdoor);
+box(14,0.14,1.5,mat.wood,2,0.07,2.45,outdoor);
+box(3,0.14,4,mat.wood,-3.5,0.07,5.2,outdoor);
+box(1,0.14,4,mat.wood,8.5,0.07,5.2,outdoor);
+for(let i=0;i<18;i++)box(0.02,0.01,1.5,mat.dark,-4.8+i*0.8,0.145,7.95,outdoor,false);
+// vaso
+box(10,0.6,4,M(0x9fe6f0),3,-0.25,5.2,outdoor,false);
+const water=box(10,0.04,4,mat.water,3,0.08,5.2,outdoor,false);water.receiveShadow=true;
+const leds=[];
+for(let i=0;i<5;i++){const l=new THREE.Mesh(new THREE.SphereGeometry(0.09,12,8),mat.led);l.position.set(-1+i*2,0.02,3.25);outdoor.add(l);leds.push(l)}
+const poolLight=new THREE.PointLight(0x7ff0ff,0,9);poolLight.position.set(3,0.5,5.2);outdoor.add(poolLight);
+const aPool=anchor(outdoor,5.5,0.12,5.2);
+// jacuzzi
+const spa=new THREE.Group();spa.position.set(-3.5,0,5.2);outdoor.add(spa);
+const ring=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.35,0.6,48),mat.stone);ring.position.y=0.3;ring.castShadow=ring.receiveShadow=true;spa.add(ring);
+const spaWater=new THREE.Mesh(new THREE.CylinderGeometry(1.08,1.08,0.04,48),mat.spa);spaWater.position.y=0.6;spa.add(spaWater);
+const NB=110,bubbles=new THREE.InstancedMesh(new THREE.SphereGeometry(0.045,8,6),mat.bubble,NB);spa.add(bubbles);
+const bData=[...Array(NB)].map(()=>({r:Math.sqrt(Math.random())*1.0,a:Math.random()*6.28,t:Math.random(),s:.5+Math.random()}));
+const dummy=new THREE.Object3D();
+const aSpa=anchor(spa,0,0.7,0);
+// tumbonas
+[[10.6,3.6],[10.6,5],[10.6,6.4]].forEach(([x,z])=>{box(1.9,0.22,0.7,mat.white,x,0.32,z,outdoor);const b=box(0.6,0.5,0.7,mat.white,x+0.9,0.55,z,outdoor);b.rotation.z=0.5});
+// sombrilla
+const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,2.6,8),mat.dark);pole.position.set(10.2,1.3,8.4);outdoor.add(pole);
+const shade=new THREE.Mesh(new THREE.ConeGeometry(1.7,0.5,4),M(0xe9e2d4));shade.position.set(10.2,2.6,8.4);shade.rotation.y=Math.PI/4;shade.castShadow=true;outdoor.add(shade);
+
+// palmeras
+function palm(x,z,h,lean){
+  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.z=lean;
+  for(let i=0;i<6;i++){const s=new THREE.Mesh(new THREE.CylinderGeometry(0.16-i*0.012,0.2-i*0.012,h/6,10),mat.trunk);s.position.y=h/12+i*h/6;s.castShadow=true;g.add(s)}
+  for(let i=0;i<9;i++){
+    const leaf=new THREE.Mesh(new THREE.ConeGeometry(0.42,3,4),mat.leaf);leaf.scale.z=0.15;
+    const pivot=new THREE.Group();pivot.position.y=h;pivot.rotation.y=i/9*Math.PI*2;
+    leaf.position.set(0,0,1.3);leaf.rotation.x=Math.PI/2+0.45;leaf.castShadow=true;
+    pivot.add(leaf);g.add(pivot);
+  }
+  world.add(g);return g;
+}
+const palms=[palm(8.4,-0.6,7.5,0.06),palm(-10.5,3,6.2,-0.1),palm(12.5,9,5.4,0.12),palm(-12,-6,7,0.05)];
+const aLawn=anchor(world,-9.5,0.2,7);
+// arbustos
+[[-8,-0.8],[-9,0.6],[6.8,1.2],[-7,9],[0,10],[6,10.2]].forEach(([x,z])=>{const s=new THREE.Mesh(new THREE.SphereGeometry(0.75,14,10),mat.hedge);s.scale.y=.7;s.position.set(x,0.4,z);s.castShadow=true;world.add(s)});
+
+/* ---------- Fichas laterales ---------- */
+const features=[
+  {a:aRoof,side:'r',r:[.13,.30],k:'Cubierta',t:'Placas solares',d:'Paneles fotovoltaicos integrados en la cubierta: energía limpia y menor factura.'},
+  {a:aCanti,side:'l',r:[.20,.37],k:'Planta alta',t:'Voladizo con terraza',d:'Ventanales de suelo a techo y barandilla de vidrio para no perder las vistas.'},
+  {a:aSmart,side:'r',r:[.29,.45],k:'Tecnología',t:'Domótica integral',d:'Clima, iluminación y persianas controlados desde el móvil, con eficiencia energética.'},
+  {a:aRadiant,side:'l',r:[.37,.55],k:'Confort',t:'Suelo radiante',d:'Calor uniforme y silencioso bajo una tarima de madera natural. Sin radiadores a la vista.'},
+  {a:aStone,side:'r',r:[.45,.60],k:'Sostenibilidad',t:'Materiales nobles',d:'Madera laminada CLT, hormigón reciclado, piedra natural y aislamiento de corcho.'},
+  {a:aPool,side:'l',r:[.60,.75],k:'Exterior',t:'Piscina con luz LED',d:'Lámina de agua iluminada y rodeada de tarima de madera tropical.'},
+  {a:aSpa,side:'r',r:[.68,.84],k:'Bienestar',t:'Jacuzzi con burbujas',d:'Hidromasaje exterior climatizado para disfrutarlo todo el año.'},
+  {a:aLawn,side:'l',r:[.79,.92],k:'Jardín',t:'Césped y palmeras',d:'Jardín de césped natural, zona de tumbonas y sombra junto a la piscina.'},
+];
+const coWrap=document.getElementById('callouts'),svg=document.getElementById('lines');
+const NS='http://www.w3.org/2000/svg';
+features.forEach(f=>{
+  f.el=document.createElement('div');f.el.className='callout';
+  f.el.innerHTML=`<small>${f.k}</small><h3>${f.t}</h3><p>${f.d}</p>`;coWrap.appendChild(f.el);
+  f.line=document.createElementNS(NS,'line');f.halo=document.createElementNS(NS,'circle');f.dot=document.createElementNS(NS,'circle');
+  f.halo.setAttribute('class','halo');f.dot.setAttribute('class','dot');f.dot.setAttribute('r',6);
+  svg.append(f.line,f.halo,f.dot);
+});
+
+/* ---------- Scroll ---------- */
+const house=document.querySelector('.house');
+const heroCopy=document.getElementById('heroCopy'),outro=document.getElementById('outroCopy'),hint=document.getElementById('scrollHint');
+const progEl=document.getElementById('progress'),chN=document.getElementById('chapterN'),chT=document.getElementById('chapterT');
+let target=0,p=0,W=1,H=1;
+function readScroll(){
+  const r=house.getBoundingClientRect();
+  target=clamp(-r.top/(house.offsetHeight-innerHeight),0,1);
+  top_.classList.toggle('solid',scrollY>house.offsetHeight-innerHeight-40);
+  factOnScroll();
+  const band=document.getElementById('bandBg');const br=band.parentElement.getBoundingClientRect();
+  if(br.bottom>0&&br.top<innerHeight)band.style.transform=`translateY(${(br.top+br.height/2-innerHeight/2)*-0.15}px)`;
+  stackScale();
+}
+addEventListener('scroll',readScroll,{passive:true});
+
+function resize(){
+  W=canvas.clientWidth;H=canvas.clientHeight;
+  renderer.setSize(W,H,false);camera.aspect=W/H;camera.updateProjectionMatrix();
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+}
+addEventListener('resize',()=>{resize();readScroll()});
+
+const v=new THREE.Vector3(),tgt=new THREE.Vector3(),clock=new THREE.Clock();
+function frame(){
+  const dt=Math.min(clock.getDelta(),0.05),t=clock.elapsedTime;
+  p+=(target-p)*(reduce?1:Math.min(1,dt*6));
+  const narrow=W/H<0.9;
+
+  // despiece
+  const e=ss(.12,.32,p)-ss(.58,.72,p);
+  roof.position.y=7.5*e;roof.rotation.z=0.05*e;
+  upper.position.y=4.3*e;
+  ground.position.y=1.9*e;
+  mat.pipe.opacity=ss(.30,.40,p)*(1-ss(.56,.64,p));
+  mat.pipe.emissiveIntensity=1+0.5*Math.sin(t*3);
+
+  // piscina y jacuzzi
+  const pool=ss(.58,.70,p);
+  leds.forEach(l=>l.scale.setScalar(1+pool));
+  poolLight.intensity=pool*2.2;
+  mat.water.emissiveIntensity=.35+pool*.5;
+  const boil=1+3*ss(.64,.72,p);
+  bData.forEach((b,i)=>{
+    b.t+=dt*0.35*b.s*boil;if(b.t>1){b.t=0;b.a=Math.random()*6.28;b.r=Math.sqrt(Math.random())*1.0}
+    const wob=Math.sin(t*4+i)*0.04;
+    dummy.position.set(Math.cos(b.a)*b.r+wob,0.42+b.t*0.24,Math.sin(b.a)*b.r);
+    dummy.scale.setScalar((0.5+b.t)*(0.6+0.6*ss(.6,.7,p)));dummy.updateMatrix();bubbles.setMatrixAt(i,dummy.matrix);
+  });
+  bubbles.instanceMatrix.needsUpdate=true;
+  spaWater.position.y=0.6+Math.sin(t*6)*0.01*boil;
+  palms.forEach((g,i)=>g.children.forEach(c=>{if(c.type==='Group')c.rotation.z=Math.sin(t*1.2+i)*0.04}));
+
+  // cámara
+  const zoom=ss(.6,.78,p),back=ss(.86,1,p);
+  const ang=-0.62+p*1.25+(reduce?0:Math.sin(t*0.15)*0.03);
+  let R=lerp(lerp(38,34,ss(0,.3,p)),22,zoom); R=lerp(R,40,back);
+  let Hc=lerp(lerp(15,12,p),8,zoom); Hc=lerp(Hc,16,back);
+  if(narrow){R*=1.55;Hc*=1.25}
+  const shift=narrow?0:lerp(-4.5,0,ss(.06,.2,p));
+  tgt.set(lerp(-1+shift,1,zoom),lerp(2.5+4.4*e,1,zoom),lerp(-1.5,4.6,zoom));
+  tgt.lerp(v.set(0,2.5,-1),back);
+  camera.position.set(tgt.x+Math.sin(ang)*R,Hc,tgt.z+Math.cos(ang)*R);
+  camera.lookAt(tgt);
+  renderer.render(scene,camera);
+
+  // textos
+  heroCopy.style.opacity=1-ss(.03,.10,p);heroCopy.style.transform=`translateY(${-60*ss(.03,.10,p)}px)`;
+  hint.style.opacity=1-ss(.01,.05,p);
+  outro.style.opacity=ss(.92,.98,p);outro.style.transform=`translateY(${30*(1-ss(.92,.98,p))}px)`;
+  progEl.style.width=(p*100)+'%';
+  let ci=-1;features.forEach((f,i)=>{if(p>=f.r[0]&&p<=f.r[1])ci=i});
+  chN.textContent=ci<0?'00':String(ci+1).padStart(2,'0');chT.textContent=ci<0?'La casa':features[ci].k;
+
+  // fichas laterales
+  const mobile=W<760;
+  features.forEach((f,i)=>{
+    const op=ss(f.r[0],f.r[0]+.035,p)*(1-ss(f.r[1]-.035,f.r[1],p));
+    f.a.getWorldPosition(v);v.project(camera);
+    const ax=(v.x*.5+.5)*W,ay=(-v.y*.5+.5)*H;
+    if(op<=0.001){f.el.style.opacity=0;f.line.style.opacity=0;f.dot.style.opacity=0;f.halo.style.opacity=0;return}
+    const cw=f.el.offsetWidth,chh=f.el.offsetHeight;
+    let lx,ly,ex,ey;
+    if(mobile){
+      f.el.style.left='';f.el.style.right='';f.el.style.top='';
+      f.el.style.transform=`translateY(${(1-op)*30}px)`;
+      const r=f.el.getBoundingClientRect(),sr=canvas.getBoundingClientRect();
+      ex=W/2;ey=r.top-sr.top;
+    }else{
+      ly=clamp(ay-chh/2,96,H-chh-(f.side==='r'?230:60));
+      const slide=(1-op)*40*(f.side==='l'?-1:1);
+      if(f.side==='l'){lx=Math.max(24,W*0.05);ex=lx+cw}else{lx=W-Math.max(24,W*0.05)-cw;ex=lx}
+      f.el.style.left=lx+'px';f.el.style.top=ly+'px';f.el.style.transform=`translateX(${slide}px)`;
+      ey=ly+30;
+    }
+    f.el.style.opacity=op;
+    // línea hasta el punto de la casa (se dibuja de fuera a dentro)
+    const k=ss(0,1,op);
+    f.line.setAttribute('x1',ex);f.line.setAttribute('y1',ey);
+    f.line.setAttribute('x2',lerp(ex,ax,k));f.line.setAttribute('y2',lerp(ey,ay,k));
+    f.line.style.opacity=mobile?op*.6:op;
+    f.dot.setAttribute('cx',ax);f.dot.setAttribute('cy',ay);f.dot.style.opacity=op;
+    const pulse=(t*0.9+i*.2)%1;
+    f.halo.setAttribute('cx',ax);f.halo.setAttribute('cy',ay);f.halo.setAttribute('r',6+pulse*18);f.halo.style.opacity=op*(1-pulse);
+  });
+  requestAnimationFrame(frame);
+}
+
+/* ---------- Tarjetas apiladas de proyectos ---------- */
+const cards=[...document.querySelectorAll('.card')];
+function stackScale(){
+  if(innerWidth<=860||reduce){cards.forEach(c=>c.style.transform='');return}
+  cards.forEach((c,i)=>{
+    const next=cards[i+1];if(!next){c.style.transform='';return}
+    const nr=next.getBoundingClientRect(),cr=c.getBoundingClientRect();
+    const k=clamp(1-(nr.top-cr.top)/cr.height,0,1);
+    c.style.transform=`scale(${1-k*0.06})`;c.style.filter=`brightness(${1-k*0.12})`;
+  });
+}
+
+resize();readScroll();frame();
+</script>
+</body>
+</html>
