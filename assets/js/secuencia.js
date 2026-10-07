@@ -68,8 +68,8 @@
       ctx.save(); ctx.filter = 'blur(28px) saturate(1.1)'; const s = Math.max(W / im0.naturalWidth, H / im0.naturalHeight) * 1.1;
       ctx.drawImage(im0, (W - im0.naturalWidth * s) / 2, (H - im0.naturalHeight * s) / 2, im0.naturalWidth * s, im0.naturalHeight * s); ctx.restore();
     }
-    ctx.globalAlpha = 1; ctx.drawImage(im0, g.x, g.y, g.w, g.h);
-    if (a1 !== a0 && k > .01) { ctx.globalAlpha = k; ctx.drawImage(imgs[a1].img, g.x, g.y, g.w, g.h); ctx.globalAlpha = 1; }
+    ctx.globalAlpha = 1; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(im0, g.x, g.y, g.w, g.h);
+    if (k > .5 && a1 !== a0) ctx.drawImage(imgs[a1].img, g.x, g.y, g.w, g.h); // fotograma más cercano, sin mezclar (nítido)
     return g;
   }
   function anchorAt(key, f) {
