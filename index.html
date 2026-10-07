@@ -38,8 +38,7 @@ p{margin:0}
 .lead{color:var(--muted);font-size:17px;max-width:62ch}
 
 /* ---------- Cabecera ---------- */
-.top{position:fixed;inset:0 0 auto 0;z-index:50;padding-top:env(safe-area-inset-top,0px);transition:background .4s,box-shadow .4s}
-.top.solid{background:rgba(255,255,255,.92);backdrop-filter:blur(10px);box-shadow:0 1px 0 var(--line)}
+.top{position:fixed;inset:0 0 auto 0;z-index:50;padding-top:env(safe-area-inset-top,0px);background:rgba(255,255,255,.94);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:0 1px 0 var(--line)}
 .top .wrap{display:flex;align-items:center;justify-content:space-between;height:76px;gap:24px}
 .logo{display:flex;flex-direction:column;text-decoration:none;color:var(--ink);line-height:1}
 .logo-word{font-family:var(--display);font-weight:300;font-size:34px;letter-spacing:.14em;display:flex;align-items:center}
@@ -60,10 +59,13 @@ p{margin:0}
 }
 
 /* ---------- Escena 3D ---------- */
-.house{height:720vh;position:relative;background:#eef1f2}
+.house{height:720vh;position:relative;background:linear-gradient(#9fc3e4,#dfe8ee 70%,#cfd8d0)}
 .stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden}
-#scene{position:absolute;inset:0;width:100%;height:100%;display:block}
-.progress{position:absolute;left:0;top:0;height:3px;background:var(--gold);width:0;z-index:5}
+#scene{position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity 1.2s}
+#scene.ready{opacity:1}
+.veil{position:absolute;inset:0;z-index:2;pointer-events:none;background:linear-gradient(90deg,rgba(255,255,255,.78),rgba(255,255,255,.35) 38%,transparent 62%)}
+.vignette{position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,transparent 55%,rgba(10,14,20,.22))}
+.progress{position:absolute;left:0;top:calc(76px + env(safe-area-inset-top,0px));height:3px;background:var(--gold);width:0;z-index:5}
 .hero-copy{position:absolute;left:var(--gutter);top:22vh;max-width:620px;z-index:4;pointer-events:none}
 .hero-copy h1{font-size:clamp(46px,8vw,104px);font-weight:600;text-transform:uppercase;letter-spacing:-.015em}
 .hero-copy p{margin-top:18px;font-size:clamp(16px,1.6vw,19px);color:#3c3a36;max-width:44ch}
@@ -90,8 +92,12 @@ p{margin:0}
 .callout h3{font-size:26px;font-weight:500}
 .callout p{font-size:14px;color:var(--muted);margin-top:8px;line-height:1.5}
 @media (max-width:760px){
-  .callout{width:auto;left:16px!important;right:16px!important;top:auto!important;bottom:150px}
-  .hero-copy{top:15vh}
+  .callout{width:auto;left:16px!important;right:16px!important;top:auto!important;bottom:calc(132px + env(safe-area-inset-bottom,0px));padding:12px 14px 14px;max-height:calc(100% - 76px - 150px);overflow:hidden}
+  .callout small{font-size:10px;margin-bottom:2px}
+  .callout h3{font-size:20px}
+  .callout p{font-size:13px;margin-top:4px}
+  .veil{background:linear-gradient(180deg,rgba(255,255,255,.8),rgba(255,255,255,.35) 45%,transparent 65%)}
+  .hero-copy{top:calc(76px + 6vh)}
   .outro-copy{left:var(--gutter);text-align:left;top:14vh}
   .chapter{display:none}
 }
@@ -263,6 +269,8 @@ footer{background:var(--night);color:#d8d4cb;padding-block:56px calc(40px + env(
 <!-- ========== CASA 3D ========== -->
 <section class="house" id="inicio">
   <div class="stage">
+    <div class="veil" id="veil"></div>
+    <div class="vignette"></div>
     <canvas id="scene" aria-label="Casa moderna en 3D con piscina, jacuzzi y jardín que se despieza al hacer scroll"></canvas>
     <div class="progress" id="progress"></div>
     <svg id="lines" aria-hidden="true"></svg>
@@ -271,7 +279,6 @@ footer{background:var(--night);color:#d8d4cb;padding-block:56px calc(40px + env(
       <span class="eyebrow">UNIKAL · Arquitectura · Diseño interior</span>
       <h1>Espacios<br>con alma.</h1>
       <p>Fusionamos innovación y diseño para dar vida a espacios únicos, personalizados y adaptados a cada cliente.</p>
-      <a class="btn" href="#proyectos">Ver proyectos</a>
     </div>
 
     <div class="outro-copy" id="outroCopy">
@@ -281,7 +288,7 @@ footer{background:var(--night);color:#d8d4cb;padding-block:56px calc(40px + env(
     </div>
 
     <div class="chapter" id="chapter"><b id="chapterN">00</b><span id="chapterT">La casa</span></div>
-    <div class="scroll-hint" id="scrollHint">Desliza<i></i></div>
+    <div class="scroll-hint" id="scrollHint">Desliza para descubrir la casa<i></i></div>
     <div id="callouts"></div>
   </div>
 </section>
@@ -566,7 +573,9 @@ footer{background:var(--night);color:#d8d4cb;padding-block:56px calc(40px + env(
   <svg viewBox="0 0 32 32"><path d="M16 3a13 13 0 0 0-11.2 19.6L3 29l6.6-1.7A13 13 0 1 0 16 3zm0 23.6a10.6 10.6 0 0 1-5.4-1.5l-.4-.2-3.9 1 1-3.8-.2-.4A10.6 10.6 0 1 1 16 26.6zm5.8-7.9c-.3-.2-1.9-.9-2.2-1s-.5-.2-.7.2-.8 1-1 1.2-.4.2-.7.1a8.7 8.7 0 0 1-4.3-3.8c-.3-.6.3-.5 1-1.7.1-.2 0-.4 0-.5l-1-2.4c-.3-.6-.5-.5-.7-.5h-.6a1.2 1.2 0 0 0-.9.4 3.6 3.6 0 0 0-1.1 2.7 6.3 6.3 0 0 0 1.3 3.3 14.4 14.4 0 0 0 5.5 4.9c2 .9 2.8 1 3.9.8a3.3 3.3 0 0 0 2.1-1.5 2.7 2.7 0 0 0 .2-1.5c-.1-.2-.3-.3-.6-.4z"/></svg>
 </a>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/geometries/RoundedBoxGeometry.js"></script>
+<script src="assets/js/casa3d.js"></script>
 <script>
 document.documentElement.classList.add('js');
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -617,281 +626,6 @@ function factOnScroll(){
   if(s!==lastSection){if(lastSection!==-1)showFact(fi+1);lastSection=s}
 }
 
-/* ---------- Escena 3D ---------- */
-const canvas=document.getElementById('scene');
-const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-renderer.outputEncoding=THREE.sRGBEncoding;
-renderer.toneMapping=THREE.NoToneMapping;
-const scene=new THREE.Scene();
-const SKY=0xeef1f2;
-scene.background=new THREE.Color(SKY);
-scene.fog=new THREE.Fog(SKY,70,150);
-const camera=new THREE.PerspectiveCamera(32,1,0.1,400);
-
-scene.add(new THREE.HemisphereLight(0xffffff,0xb7c79c,0.62));
-const sun=new THREE.DirectionalLight(0xfff1dc,1.25);
-sun.position.set(20,32,18);sun.castShadow=true;
-sun.shadow.mapSize.set(2048,2048);
-Object.assign(sun.shadow.camera,{left:-26,right:26,top:26,bottom:-26,near:1,far:90});
-sun.shadow.bias=-0.0006;sun.shadow.normalBias=0.02;
-scene.add(sun);
-
-const M=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.85,metalness:0},o));
-const mat={
-  white:M(0xf8f7f3),stone:M(0xd8cfbf,{roughness:.95}),dark:M(0x26282a,{roughness:.45,metalness:.3}),
-  glass:M(0x7fa4b6,{roughness:.05,metalness:.7,transparent:true,opacity:.5}),
-  wood:M(0x5e2d18,{roughness:.7}),floor:M(0xc59c6c,{roughness:.6}),lawn:M(0x4f8f2e,{roughness:1}),
-  ground:M(0xe8e4dc,{roughness:1}),hedge:M(0x4c7f37),leaf:M(0x3f7a35,{side:THREE.DoubleSide}),trunk:M(0x8a7458),
-  water:M(0x14b4d4,{roughness:.08,metalness:.15,emissive:0x0a7d90,emissiveIntensity:.35,transparent:true,opacity:.92}),
-  spa:M(0x5fe0ec,{roughness:.1,metalness:.1,emissive:0x0b8a9c,emissiveIntensity:.4}),
-  panel:M(0x1b2a44,{roughness:.25,metalness:.6}),sofa:M(0x8d8a86),cushion:M(0xffffff),
-  pipe:M(0xff6a2b,{emissive:0xff4a10,emissiveIntensity:1.2,transparent:true,opacity:0}),
-  led:M(0xffffff,{emissive:0x9ff6ff,emissiveIntensity:1}),
-  bubble:M(0xffffff,{transparent:true,opacity:.85,roughness:.2}),
-};
-function box(w,h,d,m,x,y,z,parent,shadow=true){
-  const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);b.position.set(x,y,z);
-  b.castShadow=shadow;b.receiveShadow=true;parent.add(b);return b;
-}
-const anchor=(parent,x,y,z)=>{const o=new THREE.Object3D();o.position.set(x,y,z);parent.add(o);return o};
-
-const world=new THREE.Group();scene.add(world);
-// Suelo y parcela
-const g0=new THREE.Mesh(new THREE.PlaneGeometry(400,400),mat.ground);g0.rotation.x=-Math.PI/2;g0.receiveShadow=true;world.add(g0);
-box(32,0.1,24,mat.lawn,1,0.05,0,world,false);
-// Valla de lamas al fondo
-for(let i=0;i<64;i++)box(0.12,1.8,0.12,mat.dark,-15+i*0.5,0.95,-11.8,world);
-box(32,0.12,0.12,mat.dark,1,1.8,-11.8,world);
-box(30,1.2,0.8,mat.hedge,1,0.65,-11,world);
-for(let i=0;i<5;i++)box(0.9,0.9,0.9,mat.hedge,12,0.5,-8+i*1.8,world);
-
-// --- Base (losa + suelo radiante) ---
-const base=new THREE.Group();world.add(base);
-box(12.6,0.3,6.6,mat.stone,-1,0.15,-3,base);
-box(9.6,0.03,5.6,mat.floor,-2.4,0.31,-3,base,false);
-const radiant=new THREE.Group();base.add(radiant);
-for(let i=0;i<10;i++){
-  box(9,0.05,0.07,mat.pipe,-2.4,0.36,-5.5+i*0.55,radiant,false);
-  if(i<9){const x=(i%2===0)?2.05:-6.85;box(0.07,0.05,0.62,mat.pipe,x,0.36,-5.5+i*0.55+0.275,radiant,false)}
-}
-// Mobiliario interior
-box(3.2,0.45,1,mat.sofa,-3.5,0.55,-4.6,base);box(1,0.45,2.2,mat.sofa,-5.6,0.55,-4,base);
-box(3.2,0.4,0.3,mat.sofa,-3.5,0.95,-5.05,base);
-box(1.4,0.35,0.8,mat.dark,-3.3,0.5,-3.1,base);
-box(2.4,0.75,1,mat.white,0.3,0.68,-4.8,base);// isla de cocina
-const aRadiant=anchor(base,-4.5,0.4,-1.2);
-
-// --- Planta baja (muros y vidrio) ---
-const ground=new THREE.Group();world.add(ground);
-box(12,3.2,0.3,mat.white,-1,1.9,-6.15,ground);
-box(0.3,3.2,6,mat.white,-6.85,1.9,-3,ground);
-box(3,3.2,6.3,mat.stone,3.5,1.9,-3,ground);
-box(9.7,3,0.06,mat.glass,-2.2,1.8,-0.15,ground,false);
-for(let i=0;i<5;i++)box(0.08,3,0.12,mat.dark,-6.7+i*2.4,1.8,-0.12,ground);
-box(9.7,0.1,0.14,mat.dark,-2.2,3.3,-0.12,ground);
-box(0.2,3.1,0.2,mat.dark,-7.6,1.75,1.3,ground);box(0.2,3.1,0.2,mat.dark,5.6,1.75,1.3,ground);
-const aStone=anchor(ground,4.4,2.2,0.2);
-
-// --- Planta alta en voladizo ---
-const upper=new THREE.Group();world.add(upper);
-box(14,0.45,8.2,mat.white,-1,3.45,-2.6,upper);
-box(14,0.5,8.2,mat.white,-1,6.45,-2.6,upper);
-box(0.45,2.6,8.2,mat.white,-7.78,4.95,-2.6,upper);box(0.45,2.6,8.2,mat.white,5.78,4.95,-2.6,upper);
-box(13,2.6,0.3,mat.white,-1,4.95,-6.5,upper);
-box(13,2.5,0.06,mat.glass,-1,4.95,-0.6,upper,false);
-for(let i=0;i<6;i++)box(0.07,2.5,0.1,mat.dark,-7+i*2.4,4.95,-0.58,upper);
-box(13,1.05,0.05,mat.glass,-1,4.2,1.45,upper,false);
-box(5.5,0.5,0.9,mat.sofa,-2,3.95,-4.6,upper);box(2.2,0.6,2.4,mat.white,3,3.95,-4,upper);
-const aCanti=anchor(upper,-7,4.3,1.4);
-const aSmart=anchor(upper,1.5,5,-0.6);
-
-// --- Cubierta con placas solares ---
-const roof=new THREE.Group();world.add(roof);
-box(14.6,0.3,8.6,mat.white,-1,6.85,-2.6,roof);
-box(14.6,0.4,0.15,mat.white,-1,7.2,1.6,roof);
-for(let r=0;r<2;r++)for(let c=0;c<5;c++){
-  const p=box(1.9,0.06,1.2,mat.panel,-6+c*2.2,7.35,-5.4+r*1.6,roof);p.rotation.x=-0.28;
-}
-box(2.4,1,2.4,mat.white,3.6,7.5,-4,roof);// casetón
-const aRoof=anchor(roof,-1.6,7.5,-4.6);
-
-// --- Tarima, piscina y jacuzzi ---
-const outdoor=new THREE.Group();world.add(outdoor);
-// tarima alrededor del vaso (x -5..9, z 1.7..8.7) con hueco para la piscina (x -2..8, z 3.2..7.2)
-box(14,0.14,1.5,mat.wood,2,0.07,7.95,outdoor);
-box(14,0.14,1.5,mat.wood,2,0.07,2.45,outdoor);
-box(3,0.14,4,mat.wood,-3.5,0.07,5.2,outdoor);
-box(1,0.14,4,mat.wood,8.5,0.07,5.2,outdoor);
-for(let i=0;i<18;i++)box(0.02,0.01,1.5,mat.dark,-4.8+i*0.8,0.145,7.95,outdoor,false);
-// vaso
-box(10,0.6,4,M(0x9fe6f0),3,-0.25,5.2,outdoor,false);
-const water=box(10,0.04,4,mat.water,3,0.08,5.2,outdoor,false);water.receiveShadow=true;
-const leds=[];
-for(let i=0;i<5;i++){const l=new THREE.Mesh(new THREE.SphereGeometry(0.09,12,8),mat.led);l.position.set(-1+i*2,0.02,3.25);outdoor.add(l);leds.push(l)}
-const poolLight=new THREE.PointLight(0x7ff0ff,0,9);poolLight.position.set(3,0.5,5.2);outdoor.add(poolLight);
-const aPool=anchor(outdoor,5.5,0.12,5.2);
-// jacuzzi
-const spa=new THREE.Group();spa.position.set(-3.5,0,5.2);outdoor.add(spa);
-const ring=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.35,0.6,48),mat.stone);ring.position.y=0.3;ring.castShadow=ring.receiveShadow=true;spa.add(ring);
-const spaWater=new THREE.Mesh(new THREE.CylinderGeometry(1.08,1.08,0.04,48),mat.spa);spaWater.position.y=0.6;spa.add(spaWater);
-const NB=110,bubbles=new THREE.InstancedMesh(new THREE.SphereGeometry(0.045,8,6),mat.bubble,NB);spa.add(bubbles);
-const bData=[...Array(NB)].map(()=>({r:Math.sqrt(Math.random())*1.0,a:Math.random()*6.28,t:Math.random(),s:.5+Math.random()}));
-const dummy=new THREE.Object3D();
-const aSpa=anchor(spa,0,0.7,0);
-// tumbonas
-[[10.6,3.6],[10.6,5],[10.6,6.4]].forEach(([x,z])=>{box(1.9,0.22,0.7,mat.white,x,0.32,z,outdoor);const b=box(0.6,0.5,0.7,mat.white,x+0.9,0.55,z,outdoor);b.rotation.z=0.5});
-// sombrilla
-const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,2.6,8),mat.dark);pole.position.set(10.2,1.3,8.4);outdoor.add(pole);
-const shade=new THREE.Mesh(new THREE.ConeGeometry(1.7,0.5,4),M(0xe9e2d4));shade.position.set(10.2,2.6,8.4);shade.rotation.y=Math.PI/4;shade.castShadow=true;outdoor.add(shade);
-
-// palmeras
-function palm(x,z,h,lean){
-  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.z=lean;
-  for(let i=0;i<6;i++){const s=new THREE.Mesh(new THREE.CylinderGeometry(0.16-i*0.012,0.2-i*0.012,h/6,10),mat.trunk);s.position.y=h/12+i*h/6;s.castShadow=true;g.add(s)}
-  for(let i=0;i<9;i++){
-    const leaf=new THREE.Mesh(new THREE.ConeGeometry(0.42,3,4),mat.leaf);leaf.scale.z=0.15;
-    const pivot=new THREE.Group();pivot.position.y=h;pivot.rotation.y=i/9*Math.PI*2;
-    leaf.position.set(0,0,1.3);leaf.rotation.x=Math.PI/2+0.45;leaf.castShadow=true;
-    pivot.add(leaf);g.add(pivot);
-  }
-  world.add(g);return g;
-}
-const palms=[palm(8.4,-0.6,7.5,0.06),palm(-10.5,3,6.2,-0.1),palm(12.5,9,5.4,0.12),palm(-12,-6,7,0.05)];
-const aLawn=anchor(world,-9.5,0.2,7);
-// arbustos
-[[-8,-0.8],[-9,0.6],[6.8,1.2],[-7,9],[0,10],[6,10.2]].forEach(([x,z])=>{const s=new THREE.Mesh(new THREE.SphereGeometry(0.75,14,10),mat.hedge);s.scale.y=.7;s.position.set(x,0.4,z);s.castShadow=true;world.add(s)});
-
-/* ---------- Fichas laterales ---------- */
-const features=[
-  {a:aRoof,side:'r',r:[.13,.30],k:'Cubierta',t:'Placas solares',d:'Paneles fotovoltaicos integrados en la cubierta: energía limpia y menor factura.'},
-  {a:aCanti,side:'l',r:[.20,.37],k:'Planta alta',t:'Voladizo con terraza',d:'Ventanales de suelo a techo y barandilla de vidrio para no perder las vistas.'},
-  {a:aSmart,side:'r',r:[.29,.45],k:'Tecnología',t:'Domótica integral',d:'Clima, iluminación y persianas controlados desde el móvil, con eficiencia energética.'},
-  {a:aRadiant,side:'l',r:[.37,.55],k:'Confort',t:'Suelo radiante',d:'Calor uniforme y silencioso bajo una tarima de madera natural. Sin radiadores a la vista.'},
-  {a:aStone,side:'r',r:[.45,.60],k:'Sostenibilidad',t:'Materiales nobles',d:'Madera laminada CLT, hormigón reciclado, piedra natural y aislamiento de corcho.'},
-  {a:aPool,side:'l',r:[.60,.75],k:'Exterior',t:'Piscina con luz LED',d:'Lámina de agua iluminada y rodeada de tarima de madera tropical.'},
-  {a:aSpa,side:'r',r:[.68,.84],k:'Bienestar',t:'Jacuzzi con burbujas',d:'Hidromasaje exterior climatizado para disfrutarlo todo el año.'},
-  {a:aLawn,side:'l',r:[.79,.92],k:'Jardín',t:'Césped y palmeras',d:'Jardín de césped natural, zona de tumbonas y sombra junto a la piscina.'},
-];
-const coWrap=document.getElementById('callouts'),svg=document.getElementById('lines');
-const NS='http://www.w3.org/2000/svg';
-features.forEach(f=>{
-  f.el=document.createElement('div');f.el.className='callout';
-  f.el.innerHTML=`<small>${f.k}</small><h3>${f.t}</h3><p>${f.d}</p>`;coWrap.appendChild(f.el);
-  f.line=document.createElementNS(NS,'line');f.halo=document.createElementNS(NS,'circle');f.dot=document.createElementNS(NS,'circle');
-  f.halo.setAttribute('class','halo');f.dot.setAttribute('class','dot');f.dot.setAttribute('r',6);
-  svg.append(f.line,f.halo,f.dot);
-});
-
-/* ---------- Scroll ---------- */
-const house=document.querySelector('.house');
-const heroCopy=document.getElementById('heroCopy'),outro=document.getElementById('outroCopy'),hint=document.getElementById('scrollHint');
-const progEl=document.getElementById('progress'),chN=document.getElementById('chapterN'),chT=document.getElementById('chapterT');
-let target=0,p=0,W=1,H=1;
-function readScroll(){
-  const r=house.getBoundingClientRect();
-  target=clamp(-r.top/(house.offsetHeight-innerHeight),0,1);
-  top_.classList.toggle('solid',scrollY>house.offsetHeight-innerHeight-40);
-  factOnScroll();
-  const band=document.getElementById('bandBg');const br=band.parentElement.getBoundingClientRect();
-  if(br.bottom>0&&br.top<innerHeight)band.style.transform=`translateY(${(br.top+br.height/2-innerHeight/2)*-0.15}px)`;
-  stackScale();
-}
-addEventListener('scroll',readScroll,{passive:true});
-
-function resize(){
-  W=canvas.clientWidth;H=canvas.clientHeight;
-  renderer.setSize(W,H,false);camera.aspect=W/H;camera.updateProjectionMatrix();
-  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
-}
-addEventListener('resize',()=>{resize();readScroll()});
-
-const v=new THREE.Vector3(),tgt=new THREE.Vector3(),clock=new THREE.Clock();
-function frame(){
-  const dt=Math.min(clock.getDelta(),0.05),t=clock.elapsedTime;
-  p+=(target-p)*(reduce?1:Math.min(1,dt*6));
-  const narrow=W/H<0.9;
-
-  // despiece
-  const e=ss(.12,.32,p)-ss(.58,.72,p);
-  roof.position.y=7.5*e;roof.rotation.z=0.05*e;
-  upper.position.y=4.3*e;
-  ground.position.y=1.9*e;
-  mat.pipe.opacity=ss(.30,.40,p)*(1-ss(.56,.64,p));
-  mat.pipe.emissiveIntensity=1+0.5*Math.sin(t*3);
-
-  // piscina y jacuzzi
-  const pool=ss(.58,.70,p);
-  leds.forEach(l=>l.scale.setScalar(1+pool));
-  poolLight.intensity=pool*2.2;
-  mat.water.emissiveIntensity=.35+pool*.5;
-  const boil=1+3*ss(.64,.72,p);
-  bData.forEach((b,i)=>{
-    b.t+=dt*0.35*b.s*boil;if(b.t>1){b.t=0;b.a=Math.random()*6.28;b.r=Math.sqrt(Math.random())*1.0}
-    const wob=Math.sin(t*4+i)*0.04;
-    dummy.position.set(Math.cos(b.a)*b.r+wob,0.42+b.t*0.24,Math.sin(b.a)*b.r);
-    dummy.scale.setScalar((0.5+b.t)*(0.6+0.6*ss(.6,.7,p)));dummy.updateMatrix();bubbles.setMatrixAt(i,dummy.matrix);
-  });
-  bubbles.instanceMatrix.needsUpdate=true;
-  spaWater.position.y=0.6+Math.sin(t*6)*0.01*boil;
-  palms.forEach((g,i)=>g.children.forEach(c=>{if(c.type==='Group')c.rotation.z=Math.sin(t*1.2+i)*0.04}));
-
-  // cámara
-  const zoom=ss(.6,.78,p),back=ss(.86,1,p);
-  const ang=-0.62+p*1.25+(reduce?0:Math.sin(t*0.15)*0.03);
-  let R=lerp(lerp(38,34,ss(0,.3,p)),22,zoom); R=lerp(R,40,back);
-  let Hc=lerp(lerp(15,12,p),8,zoom); Hc=lerp(Hc,16,back);
-  if(narrow){R*=1.55;Hc*=1.25}
-  const shift=narrow?0:lerp(-4.5,0,ss(.06,.2,p));
-  tgt.set(lerp(-1+shift,1,zoom),lerp(2.5+4.4*e,1,zoom),lerp(-1.5,4.6,zoom));
-  tgt.lerp(v.set(0,2.5,-1),back);
-  camera.position.set(tgt.x+Math.sin(ang)*R,Hc,tgt.z+Math.cos(ang)*R);
-  camera.lookAt(tgt);
-  renderer.render(scene,camera);
-
-  // textos
-  heroCopy.style.opacity=1-ss(.03,.10,p);heroCopy.style.transform=`translateY(${-60*ss(.03,.10,p)}px)`;
-  hint.style.opacity=1-ss(.01,.05,p);
-  outro.style.opacity=ss(.92,.98,p);outro.style.transform=`translateY(${30*(1-ss(.92,.98,p))}px)`;
-  progEl.style.width=(p*100)+'%';
-  let ci=-1;features.forEach((f,i)=>{if(p>=f.r[0]&&p<=f.r[1])ci=i});
-  chN.textContent=ci<0?'00':String(ci+1).padStart(2,'0');chT.textContent=ci<0?'La casa':features[ci].k;
-
-  // fichas laterales
-  const mobile=W<760;
-  features.forEach((f,i)=>{
-    const op=ss(f.r[0],f.r[0]+.035,p)*(1-ss(f.r[1]-.035,f.r[1],p));
-    f.a.getWorldPosition(v);v.project(camera);
-    const ax=(v.x*.5+.5)*W,ay=(-v.y*.5+.5)*H;
-    if(op<=0.001){f.el.style.opacity=0;f.line.style.opacity=0;f.dot.style.opacity=0;f.halo.style.opacity=0;return}
-    const cw=f.el.offsetWidth,chh=f.el.offsetHeight;
-    let lx,ly,ex,ey;
-    if(mobile){
-      f.el.style.left='';f.el.style.right='';f.el.style.top='';
-      f.el.style.transform=`translateY(${(1-op)*30}px)`;
-      const r=f.el.getBoundingClientRect(),sr=canvas.getBoundingClientRect();
-      ex=W/2;ey=r.top-sr.top;
-    }else{
-      ly=clamp(ay-chh/2,96,H-chh-(f.side==='r'?230:60));
-      const slide=(1-op)*40*(f.side==='l'?-1:1);
-      if(f.side==='l'){lx=Math.max(24,W*0.05);ex=lx+cw}else{lx=W-Math.max(24,W*0.05)-cw;ex=lx}
-      f.el.style.left=lx+'px';f.el.style.top=ly+'px';f.el.style.transform=`translateX(${slide}px)`;
-      ey=ly+30;
-    }
-    f.el.style.opacity=op;
-    // línea hasta el punto de la casa (se dibuja de fuera a dentro)
-    const k=ss(0,1,op);
-    f.line.setAttribute('x1',ex);f.line.setAttribute('y1',ey);
-    f.line.setAttribute('x2',lerp(ex,ax,k));f.line.setAttribute('y2',lerp(ey,ay,k));
-    f.line.style.opacity=mobile?op*.6:op;
-    f.dot.setAttribute('cx',ax);f.dot.setAttribute('cy',ay);f.dot.style.opacity=op;
-    const pulse=(t*0.9+i*.2)%1;
-    f.halo.setAttribute('cx',ax);f.halo.setAttribute('cy',ay);f.halo.setAttribute('r',6+pulse*18);f.halo.style.opacity=op*(1-pulse);
-  });
-  requestAnimationFrame(frame);
-}
-
 /* ---------- Tarjetas apiladas de proyectos ---------- */
 const cards=[...document.querySelectorAll('.card')];
 function stackScale(){
@@ -904,7 +638,15 @@ function stackScale(){
   });
 }
 
-resize();readScroll();frame();
+/* ---------- Scroll de la página ---------- */
+const bandBg=document.getElementById('bandBg');
+function onScroll(){
+  factOnScroll();
+  const br=bandBg.parentElement.getBoundingClientRect();
+  if(br.bottom>0&&br.top<innerHeight)bandBg.style.transform=`translateY(${(br.top+br.height/2-innerHeight/2)*-0.15}px)`;
+  stackScale();
+}
+addEventListener('scroll',onScroll,{passive:true});addEventListener('resize',onScroll);onScroll();
 </script>
 </body>
 </html>
