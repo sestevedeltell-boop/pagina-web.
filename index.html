@@ -59,8 +59,9 @@ p{margin:0}
 }
 
 /* ---------- Escena 3D ---------- */
-.house{height:720vh;position:relative;background:linear-gradient(#9fc3e4,#dfe8ee 70%,#cfd8d0)}
-.stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden}
+.house{height:760vh;position:relative;background:#dfe7ec}
+.stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;background:#dfe7ec}
+.stage::before{content:"";position:absolute;inset:76px 0 0 0;background:url(assets/seq/d/f000.webp) center/cover no-repeat}
 #scene{position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity 1.2s}
 #scene.ready{opacity:1}
 .veil{position:absolute;inset:0;z-index:2;pointer-events:none;background:linear-gradient(90deg,rgba(255,255,255,.78),rgba(255,255,255,.35) 38%,transparent 62%)}
@@ -271,7 +272,7 @@ footer{background:var(--night);color:#d8d4cb;padding-block:56px calc(40px + env(
   <div class="stage">
     <div class="veil" id="veil"></div>
     <div class="vignette"></div>
-    <canvas id="scene" aria-label="Casa moderna en 3D con piscina, jacuzzi y jardín que se despieza al hacer scroll"></canvas>
+    <canvas id="scene" aria-label="Villa moderna renderizada en 3D con piscina, jacuzzi y jardín que se despieza al hacer scroll" role="img"></canvas>
     <div class="progress" id="progress"></div>
     <svg id="lines" aria-hidden="true"></svg>
 
@@ -573,9 +574,7 @@ footer{background:var(--night);color:#d8d4cb;padding-block:56px calc(40px + env(
   <svg viewBox="0 0 32 32"><path d="M16 3a13 13 0 0 0-11.2 19.6L3 29l6.6-1.7A13 13 0 1 0 16 3zm0 23.6a10.6 10.6 0 0 1-5.4-1.5l-.4-.2-3.9 1 1-3.8-.2-.4A10.6 10.6 0 1 1 16 26.6zm5.8-7.9c-.3-.2-1.9-.9-2.2-1s-.5-.2-.7.2-.8 1-1 1.2-.4.2-.7.1a8.7 8.7 0 0 1-4.3-3.8c-.3-.6.3-.5 1-1.7.1-.2 0-.4 0-.5l-1-2.4c-.3-.6-.5-.5-.7-.5h-.6a1.2 1.2 0 0 0-.9.4 3.6 3.6 0 0 0-1.1 2.7 6.3 6.3 0 0 0 1.3 3.3 14.4 14.4 0 0 0 5.5 4.9c2 .9 2.8 1 3.9.8a3.3 3.3 0 0 0 2.1-1.5 2.7 2.7 0 0 0 .2-1.5c-.1-.2-.3-.3-.6-.4z"/></svg>
 </a>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/geometries/RoundedBoxGeometry.js"></script>
-<script src="assets/js/casa3d.js"></script>
+<script src="assets/js/secuencia.js"></script>
 <script>
 document.documentElement.classList.add('js');
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
