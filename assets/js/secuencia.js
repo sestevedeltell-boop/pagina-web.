@@ -48,13 +48,6 @@
     const s = Math.min(W * 1.5 / iw, H / ih); const w = iw * s, h = ih * s;
     return { x: (W - w) / 2, y: top + (H - top - h) * .32, w, h, portrait };
   }
-  function nearestLoaded(i) {
-    for (let d = 0; d < N; d++) {
-      if (imgs[i - d] && imgs[i - d].ok) return i - d;
-      if (imgs[i + d] && imgs[i + d].ok) return i + d;
-    }
-    return -1;
-  }
   function readScroll() {
     const r = house.getBoundingClientRect();
     target = clamp(-r.top / (house.offsetHeight - innerHeight), 0, 1);
@@ -62,8 +55,12 @@
   }
 
   function draw() {
-    const f = p * (N - 1), i0 = Math.floor(f), i1 = Math.min(N - 1, i0 + 1), k = f - i0;
-    const a0 = nearestLoaded(i0); if (a0 < 0) return false;
+    const f = p * (N - 1);
+    let a0 = -1, a1 = -1;
+    for (let i = Math.floor(f); i >= 0; i--) if (imgs[i] && imgs[i].ok) { a0 = i; break; }
+    for (let i = Math.ceil(f); i < N; i++) if (imgs[i] && imgs[i].ok) { a1 = i; break; }
+    if (a0 < 0) a0 = a1; if (a1 < 0) a1 = a0; if (a0 < 0) return false;
+    const k = a1 > a0 ? (f - a0) / (a1 - a0) : 0;
     const im0 = imgs[a0].img, g = fit(im0.naturalWidth, im0.naturalHeight);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (g.portrait) {
@@ -72,7 +69,7 @@
       ctx.drawImage(im0, (W - im0.naturalWidth * s) / 2, (H - im0.naturalHeight * s) / 2, im0.naturalWidth * s, im0.naturalHeight * s); ctx.restore();
     }
     ctx.globalAlpha = 1; ctx.drawImage(im0, g.x, g.y, g.w, g.h);
-    if (i1 !== i0 && imgs[i1] && imgs[i1].ok && k > .01) { ctx.globalAlpha = k; ctx.drawImage(imgs[i1].img, g.x, g.y, g.w, g.h); ctx.globalAlpha = 1; }
+    if (a1 !== a0 && k > .01) { ctx.globalAlpha = k; ctx.drawImage(imgs[a1].img, g.x, g.y, g.w, g.h); ctx.globalAlpha = 1; }
     return g;
   }
   function anchorAt(key, f) {
@@ -154,8 +151,9 @@
   fetch('assets/seq/manifest.json').then((r) => r.json()).then((m) => {
     N = m.n; anchors = m.anchors; imgs = new Array(N);
     const order = [], seen = new Set();
-    [16, 8, 4, 2, 1].forEach((st) => { for (let i = 0; i < N; i += st) if (!seen.has(i)) { seen.add(i); order.push(i); } });
-    if (!seen.has(N - 1)) order.push(N - 1);
+    const have = new Set(m.have || [...Array(N).keys()]);
+    [16, 8, 4, 2, 1].forEach((st) => { for (let i = 0; i < N; i += st) if (!seen.has(i) && have.has(i)) { seen.add(i); order.push(i); } });
+    have.forEach((i) => { if (!seen.has(i)) { seen.add(i); order.push(i); } });
     load(order);
   });
   addEventListener('scroll', readScroll, { passive: true });

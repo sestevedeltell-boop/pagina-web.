@@ -17,7 +17,8 @@ for i in range(N):
     im.save(d, quality=76, method=5)
     im.resize((854, 480), Image.LANCZOS).save(m, quality=72, method=5)
     done += 1
-json.dump({'n': N, 'anchors': {k: v for k, v in anchors.items()}}, open(DST + 'manifest.json', 'w'), separators=(',', ':'))
+have = [i for i in range(N) if os.path.exists(DST + 'd/f%03d.webp' % i)]
+json.dump({'n': N, 'have': have, 'anchors': {k: v for k, v in anchors.items()}}, open(DST + 'manifest.json', 'w'), separators=(',', ':'))
 tot = sum(os.path.getsize(DST + 'd/' + f) for f in os.listdir(DST + 'd'))
 totm = sum(os.path.getsize(DST + 'm/' + f) for f in os.listdir(DST + 'm'))
 print('frames', done, 'desktop MB %.1f' % (tot / 1e6), 'mobile MB %.1f' % (totm / 1e6))
