@@ -49,8 +49,11 @@ def apply(p, i):
     ob['UPPER'].location.z = 3.9 * s['e']; ob['WALLS'].location.z = 3.6 * s['e']
     ob['cam'].location = s['cam']; ob['target'].location = s['tgt']; ob['cam'].data.lens = s['lens']
     bpy.data.materials['pipe'].node_tree.nodes['Principled BSDF'].inputs['Emission Strength'].default_value = 6 * s['pipe']
-    bpy.data.materials['led'].node_tree.nodes['Principled BSDF'].inputs['Emission Strength'].default_value = 40 * s['pool']
-    bpy.data.lights['poollight'].energy = 900 * s['pool']
+    bpy.data.materials['led'].node_tree.nodes['Principled BSDF'].inputs['Emission Strength'].default_value = 12 * s['pool']
+    # hierba: menos briznas hijas cuando la cámara está alta (a distancia no se nota)
+    sc.render.use_simplify = True
+    sc.render.simplify_child_particles_render = 1.0 if s['cam'].z < 9 else .25
+    bpy.data.lights['poollight'].energy = 450 * s['pool']
     w = i * .035
     for mname, nname in (('water', 'WAVE'), ('water', 'WAVE2'), ('spawater', 'WAVE'), ('spawater', 'WAVE2'), ('spawater', 'FOAM')):
         bpy.data.materials[mname].node_tree.nodes[nname].inputs['W'].default_value = w * (3 if mname == 'spawater' else 1)

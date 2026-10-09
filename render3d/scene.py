@@ -83,7 +83,8 @@ v = objcoord(nt, 2.4); t = img(nt, v, 'tile.jpg'); L(nt, t.outputs[0], b.inputs[
 b.inputs['Roughness'].default_value = .38; L(nt, bump(nt, img(nt, v, 'tile.jpg', True).outputs[0], .15, .005), b.inputs['Normal'])
 # Tarima de ipe
 m, nt, b = newmat('wood'); M['wood'] = m
-v = objcoord(nt, 1.12); t = img(nt, v, 'wood.jpg'); r = img(nt, v, 'wood_r.jpg', True)
+v = objcoord(nt, 1.12); v.node.inputs['Scale'].default_value = (1 / 3.6, 1 / .9, 1 / .9)  # tablas largas en X, de unos 11 cm
+t = img(nt, v, 'wood.jpg'); r = img(nt, v, 'wood_r.jpg', True)
 wc0 = mix(nt, .5, t.outputs[0], lin(0x7a5638), 'MULTIPLY'); hs = node(nt, 'ShaderNodeHueSaturation'); hs.inputs['Saturation'].default_value = .72; hs.inputs['Hue'].default_value = .51; L(nt, wc0, hs.inputs['Color']); wc = hs.outputs[0]; bc = node(nt, 'ShaderNodeBrightContrast'); bc.inputs['Contrast'].default_value = .35; L(nt, wc, bc.inputs['Color']); L(nt, bc.outputs[0], b.inputs['Base Color'])
 L(nt, r.outputs[0], b.inputs['Roughness']); L(nt, bump(nt, img(nt, v, 'wood.jpg', True).outputs[0], .35, .01), b.inputs['Normal'])
 b.inputs['Coat Weight'].default_value = .15; b.inputs['Coat Roughness'].default_value = .2
@@ -398,7 +399,7 @@ mb = MB(); mb.box(PX0 + .002, PX1 - .002, PY0 + .002, PY1 - .002, -D + .002, -.0
 mb = MB(); mb.box(-3.4, 9.4, -9.2, -8.8, 0, .07); mb.box(-3.4, 9.4, -4.4, -4.0, 0, .07); mb.box(-3.4, -3.0, -8.8, -4.4, 0, .07); mb.box(9.0, 9.4, -8.8, -4.4, 0, .07)
 mb.obj('coping', 'tile', .012)
 mb = MB()
-for i in range(6): mb.cbox(-2 + i * 2, -4.42, -.45, .2, .01, .2)
+for i in range(6): mb.cbox(-2 + i * 2, -4.42, -.45, .13, .01, .13)
 mb.obj('leds', 'led', 0)
 mb = MB(); mb.box(-9.8, -3.4, -11.6, -4.0, 0, .08); mb.box(-3.4, 9.4, -11.6, -9.2, 0, .08); mb.obj('deck', 'wood', .004)
 # Jacuzzi elevado
@@ -633,9 +634,9 @@ def blocked(x, y, kind_big=True):
         if abs(x - hx) < w / 2 + 6 and abs(y - hy) < d / 2 + 8: return True
     return False
 cnt = 0; tries = 0
-while cnt < 1500 and tries < 60000:
+while cnt < 2400 and tries < 120000:
     tries += 1
-    d = 22 + (rr(0, 1) ** 1.6) * 330; a = rr(0, 2 * math.pi); x, y = math.cos(a) * d * 1.1, math.sin(a) * d
+    d = 22 + (rr(0, 1) ** 1.45) * 420; a = rr(0, 2 * math.pi); x, y = math.cos(a) * d * 1.1, math.sin(a) * d
     kind = R.choices(['pineA', 'pineB', 'oliveA', 'oliveB', 'cypress', 'bushA', 'bushB', 'palmA', 'palmB'], [3, 3, 3.5, 3.5, 1.5, 3, 3, 1, 1])[0]
     if blocked(x, y, not kind.startswith('bush')): continue
     e = bpy.data.objects.new('tree%d' % cnt, None); e.instance_type = 'COLLECTION'; e.instance_collection = proto[kind]
@@ -698,7 +699,7 @@ def area(name, loc, size, energy, color=(1, .82, .6), parent=None, rot=(0, 0, 0)
     return o
 area('in1', (-1.5, 4.5, 3.45), 4.0, 260, parent=G_BASE); area('in2', (2.5, 4.5, 3.45), 3.0, 180, parent=G_BASE)
 area('in3', (-4.5, 4.0, 6.85), 4.0, 200, parent=G_UPPER)
-pl = bpy.data.lights.new('poollight', 'POINT'); pl.energy = 0; pl.color = (.55, .95, 1); pl.shadow_soft_size = .5
+pl = bpy.data.lights.new('poollight', 'POINT'); pl.energy = 0; pl.color = (.55, .95, 1); pl.shadow_soft_size = 2.5
 plo = bpy.data.objects.new('poollight', pl); plo.location = (3, -6.6, -.9); COL.objects.link(plo)
 
 cam_d = bpy.data.cameras.new('cam'); cam_d.lens = 32; cam_d.sensor_width = 36; cam_d.clip_start = .3; cam_d.clip_end = 6000
@@ -717,9 +718,9 @@ for k, loc, par in (('roof', (-6.2, 4.6, 7.95), G_ROOF), ('canti', (-9.2, -2.0, 
 # ------------------------------------------------------------------ render
 r = sc.render; cy = sc.cycles
 r.engine = 'CYCLES'; cy.device = 'CPU'
-cy.use_adaptive_sampling = True; cy.adaptive_threshold = .015; cy.samples = 160; cy.adaptive_min_samples = 24
-cy.use_denoising = True; cy.denoiser = 'OPENIMAGEDENOISE'; cy.denoising_input_passes = 'RGB_ALBEDO_NORMAL'; cy.denoising_prefilter = 'ACCURATE'
-cy.max_bounces = 8; cy.diffuse_bounces = 3; cy.glossy_bounces = 4; cy.transmission_bounces = 10; cy.volume_bounces = 1; cy.transparent_max_bounces = 12
+cy.use_adaptive_sampling = True; cy.adaptive_threshold = .03; cy.samples = 160; cy.adaptive_min_samples = 8
+cy.use_denoising = True; cy.denoiser = 'OPENIMAGEDENOISE'; cy.denoising_input_passes = 'RGB_ALBEDO_NORMAL'; cy.denoising_prefilter = 'FAST'
+cy.max_bounces = 8; cy.diffuse_bounces = 2; cy.glossy_bounces = 2; cy.transmission_bounces = 6; cy.volume_bounces = 1; cy.transparent_max_bounces = 8
 cy.caustics_reflective = False; cy.caustics_refractive = False; cy.sample_clamp_indirect = 8; cy.blur_glossy = 1.0
 cy.use_light_tree = True
 r.use_persistent_data = True
