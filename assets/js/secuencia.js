@@ -1,5 +1,8 @@
 /* UNIKAL · Secuencia renderizada (Blender/Cycles) que avanza con el scroll.
-   Lee assets/seq/manifest.json: { n, desktop:"d/", mobile:"m/", anchors:{ "i": { clave:[x,y,visible] } } } */
+   assets/seq/manifest.json: { n, ch, have, d:[[off,len]|null…], m:[…], p:[…], anchors:{ "i": { clave:[x,y,visible] } } }
+   Los fotogramas van empaquetados en bloques (d/cNN.webp a 1080p, m/cNN.webp para móvil) y en una vista previa
+   ligera de toda la secuencia (p.webp). Los bloques se descargan por prioridad alrededor de la posición del scroll
+   y solo se mantienen decodificados los fotogramas cercanos, para no agotar la memoria del móvil. */
 (function () {
   const canvas = document.getElementById('scene');
   if (!canvas) return;
@@ -32,18 +35,29 @@
     svg.append(f.line, f.halo, f.dot);
   });
 
-  let N = 1, anchors = {}, imgs = [], W = 1, H = 1, dpr = 1, target = 0, p = 0, drawnP = -1, visible = true, dirty = true, geo = null;
   const small = matchMedia('(max-width: 760px)').matches || (screen.width < 900 && devicePixelRatio <= 2);
+  const TIER = small ? 'm' : 'd';
+  const HI_MAX = small ? 30 : 18;   // fotogramas nítidos decodificados a la vez
+  const LO_MAX = 60;                // fotogramas de vista previa decodificados a la vez
+  const PAR_DECODE = 3, PAR_FETCH = 2;
+
+  let man = null, N = 1, CH = 12, anchors = {};
+  let W = 1, H = 1, dpr = 1, target = 0, p = 0, drawnP = -1, dirIdx = 1, visible = true, dirty = true, geo = null, shown = false;
+  const hiBlob = [], loBlob = [], hiBmp = new Map(), loBmp = new Map(), pend = new Set(), chunkState = [];
+  let decoding = 0, fetching = 0;
+
+  const toBitmap = window.createImageBitmap
+    ? (b) => createImageBitmap(b)
+    : (b) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = URL.createObjectURL(b); });
 
   function resize() {
     W = canvas.clientWidth; H = canvas.clientHeight; dpr = Math.min(devicePixelRatio || 1, small ? 1.5 : 2);
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`); dirty = true;
   }
-  // Encaje de la imagen: "cover" en pantallas apaisadas; en vertical, a lo ancho con fondo difuminado
-  function fit(iw, ih) {
-    const portrait = W / H < 1.05;
-    const top = 76;
+  // Encaje de la imagen 16:9: "cover" en pantallas apaisadas; en vertical, franja ancha con fondo difuminado (CSS)
+  function fit() {
+    const iw = 16, ih = 9, portrait = W / H < 1.05, top = 76;
     if (!portrait) { const s = Math.max(W / iw, (H - top) / ih); const w = iw * s, h = ih * s; return { x: (W - w) / 2, y: top + (H - top - h) * .5, w, h, portrait }; }
     const s = Math.min(W * 1.5 / iw, H / ih); const w = iw * s, h = ih * s;
     return { x: (W - w) / 2, y: top + (H - top - h) * .32, w, h, portrait };
@@ -54,18 +68,89 @@
     visible = r.bottom > 0;
   }
 
+  /* ---------- Caché de fotogramas decodificados (LRU) ---------- */
+  function touch(map, i) { const b = map.get(i); map.delete(i); map.set(i, b); return b; }
+  function trim(map, max, keep) {
+    for (const k of map.keys()) {
+      if (map.size <= max) break;
+      if (Math.abs(k - keep) <= 2) continue;
+      const b = map.get(k); map.delete(k); if (b && b.close) b.close();
+    }
+  }
+  function decode(kind, i) {
+    const map = kind === 'h' ? hiBmp : loBmp, src = kind === 'h' ? hiBlob : loBlob, key = kind + i;
+    if (i < 0 || i >= N || map.has(i) || pend.has(key) || !src[i] || decoding >= PAR_DECODE) return;
+    pend.add(key); decoding++;
+    toBitmap(src[i]).then((bm) => {
+      map.set(i, bm); trim(map, kind === 'h' ? HI_MAX : LO_MAX, Math.round(p * (N - 1))); dirty = true;
+    }).catch(() => {}).finally(() => { pend.delete(key); decoding--; });
+  }
+  function schedule() {
+    const i = Math.round(p * (N - 1)), d = dirIdx;
+    for (const o of [0, d, 2 * d, -d, 3 * d, 4 * d, -2 * d, 5 * d, 6 * d]) if (!hiBmp.has(i + o)) decode('h', i + o);
+    for (const o of [0, d, -d, 2 * d, 3 * d]) if (!hiBmp.has(i + o) && !loBmp.has(i + o)) decode('l', i + o);
+  }
+  function nearest(map, i, maxd) {
+    for (let k = 0; k <= maxd; k++) { if (map.has(i - k)) return i - k; if (map.has(i + k)) return i + k; }
+    return -1;
+  }
+
+  /* ---------- Descarga por bloques, priorizando lo que viene por delante ---------- */
+  function chunkHasFrames(c) {
+    for (let i = c * CH; i < Math.min(N, (c + 1) * CH); i++) if (man[TIER][i]) return true;
+    return false;
+  }
+  function fetchChunk(c) {
+    chunkState[c] = 1; fetching++;
+    fetch(`assets/seq/${TIER}/c${String(c).padStart(2, '0')}.webp`)
+      .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .then((buf) => {
+        for (let i = c * CH; i < Math.min(N, (c + 1) * CH); i++) {
+          const e = man[TIER][i]; if (e) hiBlob[i] = new Blob([new Uint8Array(buf, e[0], e[1])], { type: 'image/webp' });
+        }
+        chunkState[c] = 2; dirty = true;
+      })
+      .catch(() => { chunkState[c] = 3; })
+      .finally(() => { fetching--; pumpChunks(); });
+  }
+  function pumpChunks() {
+    if (!man) return;
+    const nc = Math.ceil(N / CH), c0 = Math.floor(Math.round(target * (N - 1)) / CH);
+    while (fetching < PAR_FETCH) {
+      let best = -1, bestScore = Infinity;
+      for (let c = 0; c < nc; c++) {
+        if (chunkState[c]) continue;
+        if (!chunkHasFrames(c)) { chunkState[c] = 2; continue; }
+        const k = c - c0, score = k >= 0 ? k : -k * 1.6;
+        if (score < bestScore) { bestScore = score; best = c; }
+      }
+      if (best < 0) return;
+      fetchChunk(best);
+    }
+  }
+  function loadPreview() {
+    fetch('assets/seq/p.webp').then((r) => r.arrayBuffer()).then((buf) => {
+      for (let i = 0; i < N; i++) { const e = man.p[i]; if (e) loBlob[i] = new Blob([new Uint8Array(buf, e[0], e[1])], { type: 'image/webp' }); }
+      dirty = true;
+    }).catch(() => {});
+  }
+
+  /* ---------- Dibujo ---------- */
   function draw() {
-    const f = p * (N - 1);
-    let a0 = -1, a1 = -1;
-    for (let i = Math.floor(f); i >= 0; i--) if (imgs[i] && imgs[i].ok) { a0 = i; break; }
-    for (let i = Math.ceil(f); i < N; i++) if (imgs[i] && imgs[i].ok) { a1 = i; break; }
-    if (a0 < 0) a0 = a1; if (a1 < 0) a1 = a0; if (a0 < 0) return false;
-    const k = a1 > a0 ? (f - a0) / (a1 - a0) : 0;
-    const im0 = imgs[a0].img, g = fit(im0.naturalWidth, im0.naturalHeight);
+    const i = Math.round(p * (N - 1));
+    let bm = null, j;
+    if (hiBmp.has(i)) bm = touch(hiBmp, i);
+    else if ((j = nearest(hiBmp, i, 1)) >= 0) bm = touch(hiBmp, j);
+    else if ((j = nearest(loBmp, i, 1)) >= 0) bm = touch(loBmp, j);
+    else if ((j = nearest(hiBmp, i, N)) >= 0) bm = touch(hiBmp, j);
+    else if ((j = nearest(loBmp, i, N)) >= 0) bm = touch(loBmp, j);
+    if (!bm) return null;
+    const g = fit();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, W, H); // en vertical se ve detrás el fondo difuminado fijo (CSS)
-    ctx.globalAlpha = 1; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(im0, g.x, g.y, g.w, g.h);
-    if (k > .5 && a1 !== a0) ctx.drawImage(imgs[a1].img, g.x, g.y, g.w, g.h); // fotograma más cercano, sin mezclar (nítido)
+    ctx.clearRect(0, 0, W, H);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bm, g.x, g.y, g.w, g.h);
+    if (!shown) { shown = true; canvas.classList.add('ready'); }
     return g;
   }
   function anchorAt(key, f) {
@@ -122,40 +207,23 @@
 
   function frame() {
     requestAnimationFrame(frame);
-    if (!visible) return;
-    p += (target - p) * (reduce ? 1 : .14);
+    if (!visible || !man) return;
+    if (target > p + 1e-4) dirIdx = 1; else if (target < p - 1e-4) dirIdx = -1;
+    p += (target - p) * (reduce ? 1 : .18);
     if (Math.abs(target - p) < .0002) p = target;
+    schedule();
     if (dirty || p !== drawnP) { const g = draw(); if (g) { geo = g; drawnP = p; dirty = false; } }
     if (geo) overlay(geo);
   }
 
-  function load(order) {
-    const dir = 'assets/seq/' + (small ? 'm/' : 'd/');
-    let next = 0; const PAR = small ? 3 : 5;
-    const pump = () => {
-      if (next >= order.length) return;
-      const i = order[next++];
-      if (imgs[i]) { pump(); return; }
-      const im = new Image(); im.decoding = 'async'; imgs[i] = { img: im, ok: false };
-      im.onload = () => { imgs[i].ok = true; dirty = true; if (i === 0) canvas.classList.add('ready'); pump(); };
-      im.onerror = pump;
-      im.src = dir + 'f' + String(i).padStart(3, '0') + '.webp';
-    };
-    for (let k = 0; k < PAR; k++) pump();
-  }
-
-  // Los fotogramas se piden cuando la página ya ha terminado de cargar, para que abra al instante
+  // La secuencia se pide cuando la página ya ha terminado de cargar, para que abra al instante
   const pageLoaded = new Promise((res) => (document.readyState === 'complete' ? res() : addEventListener('load', res, { once: true })));
   Promise.all([fetch('assets/seq/manifest.json').then((r) => r.json()), pageLoaded]).then(([m]) => {
-    N = m.n; anchors = m.anchors; imgs = new Array(N);
-    const order = [], seen = new Set();
-    // En móvil basta con uno de cada dos fotogramas: menos datos y menos memoria
-    const have = new Set((m.have || [...Array(N).keys()]).filter((i) => !small || i % 2 === 0 || i === N - 1));
-    [16, 8, 4, 2, 1].forEach((st) => { for (let i = 0; i < N; i += st) if (!seen.has(i) && have.has(i)) { seen.add(i); order.push(i); } });
-    have.forEach((i) => { if (!seen.has(i)) { seen.add(i); order.push(i); } });
-    setTimeout(() => load(order), 60);
+    man = m; N = m.n; CH = m.ch || 12; anchors = m.anchors; readScroll();
+    loadPreview();
+    pumpChunks();
   }).catch(() => {});
-  addEventListener('scroll', readScroll, { passive: true });
+  addEventListener('scroll', () => { readScroll(); pumpChunks(); }, { passive: true });
   addEventListener('resize', () => { resize(); readScroll(); });
   resize(); readScroll(); frame();
 })();
