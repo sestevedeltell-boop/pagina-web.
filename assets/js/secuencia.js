@@ -36,7 +36,7 @@
   const small = matchMedia('(max-width: 760px)').matches || (screen.width < 900 && devicePixelRatio <= 2);
 
   function resize() {
-    W = canvas.clientWidth; H = canvas.clientHeight; dpr = Math.min(devicePixelRatio || 1, 2);
+    W = canvas.clientWidth; H = canvas.clientHeight; dpr = Math.min(devicePixelRatio || 1, small ? 1.5 : 2);
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`); dirty = true;
   }
@@ -63,11 +63,7 @@
     const k = a1 > a0 ? (f - a0) / (a1 - a0) : 0;
     const im0 = imgs[a0].img, g = fit(im0.naturalWidth, im0.naturalHeight);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (g.portrait) {
-      ctx.fillStyle = '#dfe7ec'; ctx.fillRect(0, 0, W, H);
-      ctx.save(); ctx.filter = 'blur(28px) saturate(1.1)'; const s = Math.max(W / im0.naturalWidth, H / im0.naturalHeight) * 1.1;
-      ctx.drawImage(im0, (W - im0.naturalWidth * s) / 2, (H - im0.naturalHeight * s) / 2, im0.naturalWidth * s, im0.naturalHeight * s); ctx.restore();
-    }
+    ctx.clearRect(0, 0, W, H); // en vertical se ve detrás el fondo difuminado fijo (CSS)
     ctx.globalAlpha = 1; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(im0, g.x, g.y, g.w, g.h);
     if (k > .5 && a1 !== a0) ctx.drawImage(imgs[a1].img, g.x, g.y, g.w, g.h); // fotograma más cercano, sin mezclar (nítido)
     return g;
@@ -135,7 +131,7 @@
 
   function load(order) {
     const dir = 'assets/seq/' + (small ? 'm/' : 'd/');
-    let next = 0; const PAR = 6;
+    let next = 0; const PAR = small ? 3 : 5;
     const pump = () => {
       if (next >= order.length) return;
       const i = order[next++];
@@ -148,14 +144,17 @@
     for (let k = 0; k < PAR; k++) pump();
   }
 
-  fetch('assets/seq/manifest.json').then((r) => r.json()).then((m) => {
+  // Los fotogramas se piden cuando la página ya ha terminado de cargar, para que abra al instante
+  const pageLoaded = new Promise((res) => (document.readyState === 'complete' ? res() : addEventListener('load', res, { once: true })));
+  Promise.all([fetch('assets/seq/manifest.json').then((r) => r.json()), pageLoaded]).then(([m]) => {
     N = m.n; anchors = m.anchors; imgs = new Array(N);
     const order = [], seen = new Set();
-    const have = new Set(m.have || [...Array(N).keys()]);
+    // En móvil basta con uno de cada dos fotogramas: menos datos y menos memoria
+    const have = new Set((m.have || [...Array(N).keys()]).filter((i) => !small || i % 2 === 0 || i === N - 1));
     [16, 8, 4, 2, 1].forEach((st) => { for (let i = 0; i < N; i += st) if (!seen.has(i) && have.has(i)) { seen.add(i); order.push(i); } });
     have.forEach((i) => { if (!seen.has(i)) { seen.add(i); order.push(i); } });
-    load(order);
-  });
+    setTimeout(() => load(order), 60);
+  }).catch(() => {});
   addEventListener('scroll', readScroll, { passive: true });
   addEventListener('resize', () => { resize(); readScroll(); });
   resize(); readScroll(); frame();
