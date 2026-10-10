@@ -4,6 +4,8 @@ import bpy, bmesh, math, random, os
 from mathutils import Vector, Matrix, Euler
 
 TEX = os.environ.get('UNIKAL_TEX', os.path.join(os.getcwd(), 'tex')) + '/'
+HERE = os.path.dirname(os.path.abspath(__file__))
+QUICK = bool(os.environ.get('UNIKAL_QUICK'))   # sin vegetación ni césped: pruebas rápidas
 R = random.Random(7)
 def rr(a, b): return R.uniform(a, b)
 def lin(h):
@@ -88,14 +90,57 @@ t = img(nt, v, 'wood.jpg'); r = img(nt, v, 'wood_r.jpg', True)
 wc0 = mix(nt, .5, t.outputs[0], lin(0x7a5638), 'MULTIPLY'); hs = node(nt, 'ShaderNodeHueSaturation'); hs.inputs['Saturation'].default_value = .72; hs.inputs['Hue'].default_value = .51; L(nt, wc0, hs.inputs['Color']); wc = hs.outputs[0]; bc = node(nt, 'ShaderNodeBrightContrast'); bc.inputs['Contrast'].default_value = .35; L(nt, wc, bc.inputs['Color']); L(nt, bc.outputs[0], b.inputs['Base Color'])
 L(nt, r.outputs[0], b.inputs['Roughness']); L(nt, bump(nt, img(nt, v, 'wood.jpg', True).outputs[0], .35, .01), b.inputs['Normal'])
 b.inputs['Coat Weight'].default_value = .15; b.inputs['Coat Roughness'].default_value = .2
-# Gresite de piscina con cáusticas falsas (animadas por W)
-m, nt, b = newmat('pooltile'); M['pooltile'] = m
-v = objcoord(nt, 1.6); t = img(nt, v, 'pooltile.jpg'); L(nt, t.outputs[0], b.inputs['Base Color'])
-b.inputs['Roughness'].default_value = .15
-tc = node(nt, 'ShaderNodeTexCoord'); vor = node(nt, 'ShaderNodeTexVoronoi'); vor.voronoi_dimensions = '4D'; vor.feature = 'DISTANCE_TO_EDGE'
-vor.inputs['Scale'].default_value = 2.2; L(nt, tc.outputs['Object'], vor.inputs['Vector']); vor.name = 'CAUS'
-cr = ramp(nt, vor.outputs['Distance'], [(0.0, (1, 1, 1, 1)), (0.06, (0, 0, 0, 1))])
-L(nt, cr, b.inputs['Emission Color']); b.inputs['Emission Strength'].default_value = .5
+# Gresite de piscina: teselas de vidrio de 2,5 cm (UV en metros), color por tesela, junta y cenefa en la línea de agua
+def mosaic(name, palette, band_palette, band_z, water_z, sigma=(.42, .075, .05)):
+    m, nt, b = newmat(name); M[name] = m
+    uv = node(nt, 'ShaderNodeUVMap'); uv.uv_map = 'UVMap'
+    sv = node(nt, 'ShaderNodeVectorMath'); sv.operation = 'SCALE'; sv.inputs['Scale'].default_value = 1 / .025; L(nt, uv.outputs['UV'], sv.inputs[0])
+    fl = node(nt, 'ShaderNodeVectorMath'); fl.operation = 'FLOOR'; L(nt, sv.outputs[0], fl.inputs[0])
+    fr = node(nt, 'ShaderNodeVectorMath'); fr.operation = 'FRACTION'; L(nt, sv.outputs[0], fr.inputs[0])
+    wn = node(nt, 'ShaderNodeTexWhiteNoise'); wn.noise_dimensions = '3D'; L(nt, fl.outputs[0], wn.inputs['Vector'])
+    def pal(stops):
+        o = ramp(nt, wn.outputs['Value'], [(p, lin(c)) for p, c in stops]); o.node.color_ramp.interpolation = 'CONSTANT'; return o
+    main, band = pal(palette), pal(band_palette)
+    # cenefa: paredes (normal horizontal) por encima de band_z
+    geo = node(nt, 'ShaderNodeNewGeometry'); sn = node(nt, 'ShaderNodeSeparateXYZ'); L(nt, geo.outputs['Normal'], sn.inputs[0])
+    nz = node(nt, 'ShaderNodeMath'); nz.operation = 'ABSOLUTE'; L(nt, sn.outputs['Z'], nz.inputs[0])
+    wall = node(nt, 'ShaderNodeMath'); wall.operation = 'LESS_THAN'; wall.inputs[1].default_value = .5; L(nt, nz.outputs[0], wall.inputs[0])
+    sp = node(nt, 'ShaderNodeSeparateXYZ'); L(nt, geo.outputs['Position'], sp.inputs[0])
+    hi = node(nt, 'ShaderNodeMath'); hi.operation = 'GREATER_THAN'; hi.inputs[1].default_value = band_z; L(nt, sp.outputs['Z'], hi.inputs[0])
+    bm_ = node(nt, 'ShaderNodeMath'); bm_.operation = 'MULTIPLY'; L(nt, wall.outputs[0], bm_.inputs[0]); L(nt, hi.outputs[0], bm_.inputs[1])
+    tile = mix(nt, bm_.outputs[0], main, band)
+    # leve variación de brillo por tesela y a gran escala
+    wn2 = node(nt, 'ShaderNodeTexWhiteNoise'); wn2.noise_dimensions = '4D'; wn2.inputs['W'].default_value = 3.3; L(nt, fl.outputs[0], wn2.inputs['Vector'])
+    bri = node(nt, 'ShaderNodeMapRange'); bri.inputs['To Min'].default_value = .86; bri.inputs['To Max'].default_value = 1.08; L(nt, wn2.outputs['Value'], bri.inputs['Value'])
+    tile = mix(nt, 1.0, tile, bri.outputs[0], 'MULTIPLY')
+    big = noise(nt, uv.outputs['UV'], 1.3, 3)
+    tile = mix(nt, .25, tile, big.outputs['Color'], 'OVERLAY')
+    # junta
+    sf = node(nt, 'ShaderNodeSeparateXYZ'); L(nt, fr.outputs[0], sf.inputs[0])
+    def edge(sock):
+        a = node(nt, 'ShaderNodeMath'); a.operation = 'SUBTRACT'; a.inputs[0].default_value = 1; L(nt, sock, a.inputs[1])
+        mn = node(nt, 'ShaderNodeMath'); mn.operation = 'MINIMUM'; L(nt, sock, mn.inputs[0]); L(nt, a.outputs[0], mn.inputs[1]); return mn.outputs[0]
+    e = node(nt, 'ShaderNodeMath'); e.operation = 'MINIMUM'; L(nt, edge(sf.outputs['X']), e.inputs[0]); L(nt, edge(sf.outputs['Y']), e.inputs[1])
+    gr = node(nt, 'ShaderNodeMapRange'); gr.inputs['From Min'].default_value = .035; gr.inputs['From Max'].default_value = .075
+    gr.inputs['To Min'].default_value = 1; gr.inputs['To Max'].default_value = 0; L(nt, e.outputs[0], gr.inputs['Value'])
+    col = mix(nt, gr.outputs[0], tile, lin(0xd9dcd8))
+    # absorción del agua: el rojo se pierde con la profundidad (ida y vuelta de la luz)
+    dz = node(nt, 'ShaderNodeMath'); dz.operation = 'SUBTRACT'; dz.inputs[0].default_value = water_z; L(nt, sp.outputs['Z'], dz.inputs[1])
+    dz2 = node(nt, 'ShaderNodeMath'); dz2.operation = 'MAXIMUM'; dz2.inputs[1].default_value = 0; L(nt, dz.outputs[0], dz2.inputs[0])
+    cmb = node(nt, 'ShaderNodeCombineXYZ')
+    for k, s_ in enumerate(sigma):
+        mu = node(nt, 'ShaderNodeMath'); mu.operation = 'MULTIPLY'; mu.inputs[1].default_value = -2.4 * s_; L(nt, dz2.outputs[0], mu.inputs[0])
+        ex = node(nt, 'ShaderNodeMath'); ex.operation = 'EXPONENT'; L(nt, mu.outputs[0], ex.inputs[0]); L(nt, ex.outputs[0], cmb.inputs[k])
+    col = mix(nt, 1.0, col, cmb.outputs[0], 'MULTIPLY')
+    L(nt, col, b.inputs['Base Color'])
+    rgh = node(nt, 'ShaderNodeMapRange'); rgh.inputs['To Min'].default_value = .06; rgh.inputs['To Max'].default_value = .7; L(nt, gr.outputs[0], rgh.inputs['Value'])
+    L(nt, rgh.outputs[0], b.inputs['Roughness'])
+    inv = node(nt, 'ShaderNodeMath'); inv.operation = 'SUBTRACT'; inv.inputs[0].default_value = 1; L(nt, gr.outputs[0], inv.inputs[1])
+    L(nt, bump(nt, inv.outputs[0], .35, .0015), b.inputs['Normal'])
+    return m
+mosaic('pooltile', [(0, 0x8fd0de), (.34, 0x66c0d3), (.58, 0xb7e3eb), (.78, 0x45a6c4), (.9, 0xe3f3f5)],
+       [(0, 0x1f6d8a), (.45, 0x2b84a3), (.8, 0x195a74)], -.27, -.07)
+mosaic('spatile', [(0, 0x9ad5e1), (.4, 0x74c6d6), (.7, 0xc4e8ee), (.88, 0x4fadc8)], [(0, 0x9ad5e1), (1, 0x9ad5e1)], 9., .6)
 # Césped con franjas de corte
 m, nt, b = newmat('lawn'); M['lawn'] = m
 tc = node(nt, 'ShaderNodeTexCoord'); v = tc.outputs['Object']
@@ -122,10 +167,17 @@ def haze(nt, colsock, b, k=900.):
     em = node(nt, 'ShaderNodeMath'); em.operation = 'MULTIPLY'; em.inputs[1].default_value = .9; L(nt, inv.outputs[0], em.inputs[0])
     L(nt, out, b.inputs['Emission Color']); L(nt, em.outputs[0], b.inputs['Emission Strength'])
 m, nt, b = newmat('land'); M['land'] = m
+# campo mediterráneo: parcelas (Voronoi) de hierba seca, matorral y tierra, con variación interior
 tc = node(nt, 'ShaderNodeTexCoord'); v = tc.outputs['Object']
-n1 = noise(nt, v, .05, 6); n2 = noise(nt, v, .8, 4); n3 = noise(nt, v, 30, 2)
-c = ramp(nt, n1.outputs['Fac'], [(0.35, lin(0x4f5230)), (0.48, lin(0x655c38)), (0.6, lin(0x46532a)), (0.72, lin(0x3a4a22))])
-c = mix(nt, n2.outputs['Fac'], c, lin(0x585636), 'MIX')
+wv = noise(nt, v, .004, 2); dv = node(nt, 'ShaderNodeVectorMath'); dv.operation = 'MULTIPLY_ADD'; dv.inputs[1].default_value = (35, 35, 0)
+L(nt, wv.outputs['Color'], dv.inputs[0]); L(nt, v, dv.inputs[2])
+vo = node(nt, 'ShaderNodeTexVoronoi'); vo.inputs['Scale'].default_value = .018; vo.inputs['Randomness'].default_value = 1; L(nt, dv.outputs[0], vo.inputs['Vector'])
+parc = ramp(nt, vo.outputs['Color'], [(0, lin(0x6b6440)), (.22, lin(0x7a7047)), (.4, lin(0x55603a)), (.58, lin(0x4a5532)), (.75, lin(0x6e573d)), (.9, lin(0x80754d))])
+parc.node.color_ramp.interpolation = 'CONSTANT'
+n1 = noise(nt, v, .06, 6); n2 = noise(nt, v, .9, 4); n3 = noise(nt, v, 30, 2)
+nf = node(nt, 'ShaderNodeMath'); nf.operation = 'MULTIPLY'; nf.inputs[1].default_value = .45; L(nt, n1.outputs['Fac'], nf.inputs[0])
+c = mix(nt, nf.outputs[0], parc, lin(0x4b5134))
+c = mix(nt, .3, c, ramp(nt, n2.outputs['Fac'], [(0.35, lin(0x56553a)), (0.65, lin(0x76704c))]), 'MIX')
 haze(nt, c, b, 1400.); b.inputs['Roughness'].default_value = 1
 L(nt, bump(nt, n3.outputs['Fac'], .5, .05), b.inputs['Normal'])
 m, nt, b = newmat('hills'); M['hills'] = m
@@ -141,30 +193,19 @@ def glassmat(name, tint=0xf2f6f5, rough=0.):
     mx = node(nt, 'ShaderNodeMixShader'); out = nt.nodes['Material Output']
     L(nt, lp.outputs['Is Shadow Ray'], mx.inputs[0]); L(nt, b.outputs[0], mx.inputs[1]); L(nt, tr.outputs[0], mx.inputs[2]); L(nt, mx.outputs[0], out.inputs['Surface'])
 glassmat('glass')
-# Agua de piscina (volumen con absorción, oleaje animado por W)
-def watermat(name, absorb, dens, wave_scale, foam=False):
+# Agua: superficie refractiva de verdad (las olas son geometría) y volumen que absorbe el rojo.
+# Sin trucos de sombra: la luz del sol atraviesa la superficie con "shadow caustics" (MNEE) y dibuja las cáusticas.
+# (Cycles no calcula estas cáusticas del sol si hay un volumen en el camino: la absorción del agua va en el gresite, según la profundidad.)
+def watermat(name, tint):
     m, nt, b = newmat(name); M[name] = m
-    b.inputs['Base Color'].default_value = (1, 1, 1, 1); b.inputs['Transmission Weight'].default_value = 1
+    b.inputs['Base Color'].default_value = tint; b.inputs['Transmission Weight'].default_value = 1
     b.inputs['Roughness'].default_value = .0; b.inputs['IOR'].default_value = 1.333
-    tc = node(nt, 'ShaderNodeTexCoord'); n = noise(nt, tc.outputs['Object'], wave_scale, 3, .5, w=0.); n.name = 'WAVE'
-    n2 = noise(nt, tc.outputs['Object'], wave_scale * 3.1, 2, .5, w=0.); n2.name = 'WAVE2'
-    ad = node(nt, 'ShaderNodeMath'); ad.operation = 'ADD'; L(nt, n.outputs['Fac'], ad.inputs[0]); L(nt, n2.outputs['Fac'], ad.inputs[1])
-    L(nt, bump(nt, ad.outputs[0], .25, .02), b.inputs['Normal'])
-    out = nt.nodes['Material Output']
-    lp = node(nt, 'ShaderNodeLightPath'); tr = node(nt, 'ShaderNodeBsdfTransparent')
-    mx = node(nt, 'ShaderNodeMixShader'); L(nt, lp.outputs['Is Shadow Ray'], mx.inputs[0]); L(nt, b.outputs[0], mx.inputs[1]); L(nt, tr.outputs[0], mx.inputs[2])
-    surf = mx.outputs[0]
-    if foam:
-        fn = noise(nt, tc.outputs['Object'], 9, 6, .7, w=0.); fn.name = 'FOAM'
-        fm = ramp(nt, fn.outputs['Fac'], [(0.5, (0, 0, 0, 1)), (0.62, (1, 1, 1, 1))]); fm_n = node(nt, 'ShaderNodeMath'); fm_n.name = 'FOAMAMT'
-        fm_n.operation = 'MULTIPLY'; fm_n.inputs[1].default_value = .6; L(nt, fm, fm_n.inputs[0])
-        fb = node(nt, 'ShaderNodeBsdfPrincipled'); fb.inputs['Base Color'].default_value = (.95, .97, .97, 1); fb.inputs['Roughness'].default_value = .6
-        mx2 = node(nt, 'ShaderNodeMixShader'); L(nt, fm_n.outputs[0], mx2.inputs[0]); L(nt, surf, mx2.inputs[1]); L(nt, fb.outputs[0], mx2.inputs[2]); surf = mx2.outputs[0]
-    L(nt, surf, out.inputs['Surface'])
-    va = node(nt, 'ShaderNodeVolumeAbsorption'); va.inputs['Color'].default_value = lin(absorb); va.inputs['Density'].default_value = dens
-    L(nt, va.outputs[0], out.inputs['Volume'])
-watermat('water', 0x4fd6e0, .55, 1.6)
-watermat('spawater', 0x5ad9e3, .8, 3.0, foam=True)
+watermat('water', (.9, .985, 1, 1))
+watermat('spawater', (.92, .99, 1, 1))
+# Espuma y burbujas del jacuzzi
+m, nt, b = newmat('foam'); M['foam'] = m
+b.inputs['Base Color'].default_value = lin(0xf4f8f8); b.inputs['Roughness'].default_value = .25
+b.inputs['Subsurface Weight'].default_value = .4; b.inputs['Subsurface Radius'].default_value = (.02, .02, .02); b.inputs['Coat Weight'].default_value = .6
 # Metales, telas y maderas
 simple('alu', 0x2a2b2d, .35, .9)
 simple('steel', 0xc9ccd0, .18, 1.)
@@ -394,8 +435,38 @@ mb.poly([(PX0, PY0, -D), (PX1, PY0, -D), (PX1, PY1, -D), (PX0, PY1, -D)])
 for (a, b2) in (((PX0, PY0), (PX1, PY0)), ((PX1, PY0), (PX1, PY1)), ((PX1, PY1), (PX0, PY1)), ((PX0, PY1), (PX0, PY0))):
     mb.poly([(a[0], a[1], 0), (b2[0], b2[1], 0), (b2[0], b2[1], -D), (a[0], a[1], -D)])
 mb.box(-3, 0, -5.6, -4.4, -D, -1.05); mb.box(-3, 0, -5.0, -4.4, -D, -.6)
-mb.obj('pool', 'pooltile', 0, recalc=False)
-mb = MB(); mb.box(PX0 + .002, PX1 - .002, PY0 + .002, PY1 - .002, -D + .002, -.07); mb.obj('water', 'water', 0)
+def planar_uv(ob, cyl=None):
+    """UV en metros según la orientación de cada cara (cilíndricas en las paredes del jacuzzi)."""
+    me = ob.data; uvl = me.uv_layers.new(name='UVMap')
+    for p in me.polygons:
+        n = p.normal; lis = list(p.loop_indices); cos = [me.vertices[me.loops[li].vertex_index].co for li in lis]
+        if abs(n.z) > .5: uvs = [(c.x, c.y) for c in cos]
+        elif cyl:
+            ang = [math.atan2(c.y - cyl[1], c.x - cyl[0]) for c in cos]
+            if max(ang) - min(ang) > math.pi: ang = [a + 2 * math.pi if a < 0 else a for a in ang]
+            uvs = [(a * cyl[2], c.z) for a, c in zip(ang, cos)]
+        elif abs(n.x) > .5: uvs = [(c.y, c.z) for c in cos]
+        else: uvs = [(c.x, c.z) for c in cos]
+        for li, uv in zip(lis, uvs): uvl.data[li].uv = uv
+def water_sheet(name, mat, x0, x1, y0, y1, z, step, keep=None):
+    """Superficie del agua: rejilla fina que render.py ondula en cada fotograma (olas.py).
+    Se mete unos centímetros dentro de las paredes: fondo y paredes quedan dentro del volumen del agua."""
+    import numpy as np
+    nx = int(round((x1 - x0) / step)); ny = int(round((y1 - y0) / step))
+    X, Y = np.meshgrid(np.linspace(x0, x1, nx + 1), np.linspace(y0, y1, ny + 1))
+    V = np.stack([X.ravel(), Y.ravel(), np.full(X.size, z)], 1)
+    idx = np.arange(X.size).reshape(ny + 1, nx + 1)
+    F = np.stack([idx[:-1, :-1], idx[:-1, 1:], idx[1:, 1:], idx[1:, :-1]], -1).reshape(-1, 4)
+    if keep is not None:
+        c = V[F].mean(1); F = F[keep(c[:, 0], c[:, 1])]
+        used = np.unique(F); remap = np.full(len(V), -1); remap[used] = np.arange(len(used)); V = V[used]; F = remap[F]
+    me = bpy.data.meshes.new(name); me.from_pydata(V.tolist(), [], F.tolist()); me.update()
+    me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
+    ob = bpy.data.objects.new(name, me); COL.objects.link(ob); me.materials.append(M[mat])
+    ob['wave_z'] = z; ob.cycles.is_caustics_caster = True
+    return ob
+pool_ob = mb.obj('pool', 'pooltile', 0, recalc=False); planar_uv(pool_ob); pool_ob.cycles.is_caustics_receiver = True
+water_sheet('water', 'water', PX0 - .03, PX1 + .03, PY0 - .03, PY1 + .03, -.07, .015)
 mb = MB(); mb.box(-3.4, 9.4, -9.2, -8.8, 0, .07); mb.box(-3.4, 9.4, -4.4, -4.0, 0, .07); mb.box(-3.4, -3.0, -8.8, -4.4, 0, .07); mb.box(9.0, 9.4, -8.8, -4.4, 0, .07)
 mb.obj('coping', 'tile', .012)
 mb = MB()
@@ -404,7 +475,7 @@ mb.obj('leds', 'led', 0)
 mb = MB(); mb.box(-9.8, -3.4, -11.6, -4.0, 0, .08); mb.box(-3.4, 9.4, -11.6, -9.2, 0, .08); mb.obj('deck', 'wood', .004)
 # Jacuzzi elevado
 JX, JY = -6.4, -7.2
-mb = MB(); n = 64
+mb = MB(); n = 160
 outer_b = [mb.bm.verts.new((JX + 1.5 * math.cos(a), JY + 1.5 * math.sin(a), .08)) for a in [i / n * 2 * math.pi for i in range(n)]]
 outer_t = [mb.bm.verts.new((JX + 1.5 * math.cos(a), JY + 1.5 * math.sin(a), .68)) for a in [i / n * 2 * math.pi for i in range(n)]]
 inner_t = [mb.bm.verts.new((JX + 1.2 * math.cos(a), JY + 1.2 * math.sin(a), .68)) for a in [i / n * 2 * math.pi for i in range(n)]]
@@ -415,8 +486,11 @@ for i in range(n):
     mb.bm.faces.new((outer_b[i], outer_b[j], outer_t[j], outer_t[i])); mb.bm.faces.new((outer_t[i], outer_t[j], inner_t[j], inner_t[i]))
     mi.bm.faces.new((inner_t2[i], inner_t2[j], inner_b2[j], inner_b2[i]))
 mi.bm.faces.new(list(inner_b2))
-mb.obj('spa', 'render', .01, recalc=False); mi.obj('spain', 'pooltile', 0, recalc=False)
-mb = MB(); mb.cyl(JX, JY, .121, .6, 1.198, 64); mb.obj('spawater', 'spawater', 0, smooth=True)
+mb.obj('spa', 'render', .01, recalc=False)
+spain = mi.obj('spain', 'spatile', 0, recalc=False); planar_uv(spain, (JX, JY, 1.2)); spain.cycles.is_caustics_receiver = True
+water_sheet('spawater', 'spawater', JX - 1.26, JX + 1.26, JY - 1.26, JY + 1.26, .6, .012, keep=lambda x, y: (x - JX) ** 2 + (y - JY) ** 2 < 1.225 ** 2)
+# burbujas y espuma: render.py las coloca en cada fotograma
+fo = bpy.data.objects.new('spafoam', bpy.data.meshes.new('spafoam')); COL.objects.link(fo); fo.data.materials.append(M['foam'])
 mb = MB(); mb.cbox(JX, JY - 1.85, .17, 1.0, .5, .18); mb.obj('spastep', 'wood', .005)
 # Tumbonas, sombrilla
 for i, x in enumerate((1.0, 2.3, 3.6)):
@@ -431,217 +505,8 @@ for i in range(4): mb.bm.faces.new((apex, ring[i], ring[(i + 1) % 4]))
 o = mb.obj('canopy', 'canvas', 0); o.modifiers.new('sol', 'SOLIDIFY').thickness = .01
 
 # ------------------------------------------------------------------ vegetación
-def leaf(mb, p, d, up, L, W, color, fold=.25, curl=.0):
-    """Hoja elíptica de 7 vértices. d: dirección, up: normal aproximada."""
-    d = d.normalized(); side = d.cross(up).normalized(); nrm = side.cross(d).normalized()
-    tip = p + d * L + nrm * (-curl * L)
-    a1 = p + d * (L * .3) + side * (W * .5) + nrm * (fold * W * .5)
-    a2 = p + d * (L * .68) + side * (W * .38) + nrm * (fold * W * .4 - curl * L * .4)
-    b1 = p + d * (L * .3) - side * (W * .5) + nrm * (fold * W * .5)
-    b2 = p + d * (L * .68) - side * (W * .38) + nrm * (fold * W * .4 - curl * L * .4)
-    mid1 = p + d * (L * .3); mid2 = p + d * (L * .68) + nrm * (-curl * L * .4)
-    mb.poly([p, a1, mid1], color); mb.poly([p, mid1, b1], color)
-    mb.poly([mid1, a1, a2, mid2], color); mb.poly([mid1, mid2, b2, b1], color)
-    mb.poly([mid2, a2, tip], color); mb.poly([mid2, tip, b2], color)
-
-def srgb(h): return tuple(((h >> s_) & 255) / 255 for s_ in (16, 8, 0)) + (1.0,)
-def rcol(base, var=.12):
-    c = srgb(base); f = rr(1 - var, 1 + var); g = rr(-var, var) * .5
-    return (max(0, c[0] * f * (1 - g)), max(0, c[1] * f), max(0, c[2] * f * (1 + g)), 1)
-
-def randdir():
-    while True:
-        v = Vector((rr(-1, 1), rr(-1, 1), rr(-1, 1)))
-        if .05 < v.length <= 1: return v.normalized()
-
-def shrub(mb, core, c, sx, sy, sz, n, leafL=(.07, .12), palette=(0x3d6a26, 0x4f7d2e, 0x2f5420, 0x5b8a34), flowers=None, fmb=None):
-    for i in range(n):
-        u = randdir(); rad = rr(.75, 1.0)
-        p = Vector((c[0] + u.x * sx * rad, c[1] + u.y * sy * rad, c[2] + u.z * sz * rad))
-        if p.z < .02: continue
-        d = (u + randdir() * .9).normalized()
-        L = rr(*leafL); leaf(mb, p, d, u, L, L * .5, rcol(R.choice(palette)), .3, rr(-.1, .25))
-        if flowers and fmb and R.random() < flowers:
-            q = p + u * .02; s = rr(.025, .04); fc = rcol(R.choice((0xc2185b, 0xd81b60, 0xad1457, 0xe91e63)), .08)
-            for k in range(3):
-                dd = (randdir() + u).normalized(); leaf(fmb, q, dd, u, s * 1.4, s * 1.2, fc, .5, .2)
-    # núcleo oscuro para tapar huecos
-    ret = bmesh.ops.create_icosphere(core.bm, subdivisions=2, radius=1.0)
-    for v in ret['verts']: v.co = Vector((c[0] + v.co.x * sx * .82, c[1] + v.co.y * sy * .82, c[2] + v.co.z * sz * .82))
-
-leaves = MB(True); flowers = MB(True); cores = MB()
-# setos perimetrales
-x = -15.3
-while x <= 17.3:
-    shrub(leaves, cores, (x, 12.6, 1.05), .7, .6, 1.05, 520, (.1, .16)); x += 1.0
-y = -12.5
-while y <= 12.0:
-    shrub(leaves, cores, (-15.2, y, .95), .6, .65, .95, 420, (.1, .16)); shrub(leaves, cores, (17.2, y, .95), .6, .65, .95, 420, (.1, .16)); y += 1.1
-x = -15.3
-while x <= 17.4:
-    if not (-2.2 < x < 4.2): shrub(leaves, cores, (x, -12.9, .55), .55, .45, .6, 300, (.08, .13))
-    x += 1.0
-# arbustos sueltos y buganvillas
-for (x, y, s, fl) in ((9.2, .4, 1.0, 0), (7.6, .6, .8, .0), (-11.2, -4.2, .9, .35), (-10.5, -5.6, .7, 0), (12.2, -5.0, .9, 0), (13.2, -9.4, 1.0, .3),
-                      (-12.8, -8.8, .8, 0), (-10.0, 1.6, .75, 0), (7.2, -1.5, .55, 0), (11.6, 4.0, .9, 0), (-12.6, 4.5, 1.0, .3), (16.6, 12.4, 1.3, .45), (-15.0, 12.2, 1.3, .45)):
-    shrub(leaves, cores, (x, y, s * .7), s, s, s * .8, int(1500 * s * s), (.08, .13), flowers=fl, fmb=flowers)
-# flores bajas en parterres
-for (bx, by, w, d) in ((8.4, .5, 2.2, .9), (-11.4, -5, 1.2, 2), (12.6, -6.8, 1.4, 2.4), (-10.6, 2.8, 1.2, 1.4)):
-    for i in range(int(w * d * 60)):
-        p = Vector((bx + rr(-w, w), by + rr(-d, d), rr(.05, .35)))
-        c = rcol(R.choice((0xd2263b, 0xe0457b, 0xf4f4f4, 0xd9372a, 0xf0a3c0)), .05)
-        for k in range(4): leaf(flowers, p, Vector((math.cos(k * 1.57 + .3), math.sin(k * 1.57 + .3), .4)), Vector((0, 0, 1)), .035, .03, c, .4)
-        leaf(leaves, Vector((p.x, p.y, rr(.02, p.z))), Vector((rr(-1, 1), rr(-1, 1), .6)), Vector((0, 0, 1)), .08, .03, rcol(0x3f6b25), .3)
-simple('core', 0x2c4a1e, 1.)
-leaves.obj('leaves', 'leaf'); flowers.obj('flowers', 'leaf'); cores.obj('bushcores', 'core', smooth=True)
-
-# Palmeras con folíolos en geometría
-def palm(name, x, y, h, lean, yaw, seed):
-    R.seed(seed)
-    trunk = MB(); fr = MB(True)
-    top = Vector((math.sin(yaw) * lean * h, math.cos(yaw) * lean * h, h))
-    def curve(t):
-        return Vector((top.x * (t ** 1.8), top.y * (t ** 1.8), h * t))
-    seg, rad = 40, 14; rings = []
-    for i in range(seg + 1):
-        t = i / seg; c = curve(t) + Vector((x, y, 0))
-        r0 = (.26 - .08 * t) * (1.35 if t < .04 else 1) * (1 + .05 * math.sin(i * 2.7))
-        ring = [trunk.bm.verts.new(c + Vector((math.cos(a) * r0, math.sin(a) * r0, 0))) for a in [k / rad * 2 * math.pi for k in range(rad)]]
-        rings.append(ring)
-    for i in range(seg):
-        for k in range(rad): trunk.bm.faces.new((rings[i][k], rings[i][(k + 1) % rad], rings[i + 1][(k + 1) % rad], rings[i + 1][k]))
-    crown = curve(1) + Vector((x, y, 0))
-    ret = bmesh.ops.create_uvsphere(trunk.bm, u_segments=12, v_segments=8, radius=.42)
-    for v in ret['verts']: v.co = Vector((v.co.x, v.co.y, v.co.z * 1.4)) + crown - Vector((0, 0, .25))
-    nf = 17
-    for i in range(nf):
-        dry = i >= nf - 3
-        yawf = i * 2.39996 + rr(-.15, .15)
-        elev = rr(-1.25, -.95) if dry else (rr(.55, 1.0) if i < 6 else rr(-.05, .45))
-        Lf = rr(2.2, 2.8) if dry else rr(3.0, 4.2)
-        droop = .05 if dry else rr(.45, .8)
-        dirh = Vector((math.cos(yawf), math.sin(yawf), 0))
-        base_col = 0x9c8455 if dry else R.choice((0x3a6e22, 0x467d28, 0x2f6320, 0x528a2c))
-        pts = []
-        for k in range(16):
-            t = k / 15
-            e = elev - droop * t * t * 1.6
-            pts.append(crown + dirh * (math.cos(elev) * Lf * t) + Vector((0, 0, math.sin(elev) * Lf * t - droop * Lf * t * t * .8)))
-        for k in range(15):  # raquis
-            a, b2 = pts[k], pts[k + 1]; w = .025 * (1 - k / 15) + .006
-            side = (b2 - a).cross(Vector((0, 0, 1))).normalized() * w
-            fr.poly([a - side, a + side, b2 + side, b2 - side], rcol(0x8a8a50, .05))
-        nl = 44
-        for k in range(2, nl):
-            t = k / nl; idx = t * 15; i0 = min(14, int(idx)); f = idx - i0
-            p = pts[i0].lerp(pts[i0 + 1], f); tang = (pts[i0 + 1] - pts[i0]).normalized()
-            sidev = tang.cross(Vector((0, 0, 1))).normalized()
-            Ll = (.35 + .75 * math.sin(min(1, t * 1.15) * math.pi * .95)) * (Lf / 3.6) * (.7 if dry else 1)
-            for s in (-1, 1):
-                d = (tang * .55 + sidev * s * 1.0 + Vector((0, 0, .35 if not dry else -.4))).normalized()
-                c = rcol(base_col, .1)
-                leaf(fr, p, d, Vector((0, 0, 1)), Ll, .075, c, .15, rr(.15, .35) if not dry else .05)
-    trunk.obj(name + '_trunk', 'trunk', 0, smooth=True)
-    fr.obj(name + '_fronds', 'leaf')
-palm('palm1', 10.6, -.8, 8.6, .07, .6, 1); palm('palm2', 13.6, -3.2, 7.2, .1, 1.2, 2); palm('palm3', -12.2, -2.4, 7.8, .08, -.7, 3)
-palm('palm4', -13.4, 9.2, 9.2, .05, 2.8, 4); palm('palm5', 14.6, -11.2, 6.4, .12, 2.2, 5); palm('palm6', -13.8, -9.0, 6.0, .1, -2.4, 6)
-palm('palm7', 6.8, 9.6, 8.0, .06, 3.6, 7)
-R.seed(99)
-
-# Árboles mediterráneos instanciados (pino piñonero, olivo, ciprés)
-m, nt, b = newmat('canopy'); M['canopy'] = m
-tc = node(nt, 'ShaderNodeTexCoord'); ob_i = node(nt, 'ShaderNodeObjectInfo')
-n1 = noise(nt, tc.outputs['Object'], 9, 8, .7); n2 = noise(nt, tc.outputs['Object'], 2, 3)
-ca = node(nt, 'ShaderNodeVertexColor'); ca.layer_name = 'col'
-var = mix(nt, ob_i.outputs['Random'], ca.outputs['Color'], lin(0x6a7a40), 'MIX')
-c = mix(nt, n1.outputs['Fac'], lin(0x1d2a12), var, 'MIX'); c = mix(nt, .6, c, var, 'MIX')
-
-haze(nt, c, b, 900.)
-b.inputs['Roughness'].default_value = .9; L(nt, bump(nt, n1.outputs['Fac'], 1.0, .3), b.inputs['Normal'])
-proto = {}
-def proto_tree(name, build):
-    col = bpy.data.collections.new(name); mbt = MB(True); mtr = MB(); build(mbt, mtr)
-    o1 = mbt.obj(name + '_c', 'leaf'); o2 = mtr.obj(name + '_t', 'olivetrunk', smooth=True)
-    for o in (o1, o2):
-        COL.objects.unlink(o); col.objects.link(o)
-    proto[name] = col
-def tube(mb, p0, p1, r0, r1, n=7):
-    p0, p1 = Vector(p0), Vector(p1); ax = (p1 - p0).normalized()
-    u = ax.orthogonal().normalized(); v = ax.cross(u)
-    a = [mb.bm.verts.new(p0 + (u * math.cos(t) + v * math.sin(t)) * r0) for t in [k / n * 2 * math.pi for k in range(n)]]
-    b_ = [mb.bm.verts.new(p1 + (u * math.cos(t) + v * math.sin(t)) * r1) for t in [k / n * 2 * math.pi for k in range(n)]]
-    for k in range(n): mb.bm.faces.new((a[k], a[(k + 1) % n], b_[(k + 1) % n], b_[k]))
-def tuft(mbt, c, n, Lr, Wr, palette, up_bias=.3):
-    for _ in range(n):
-        d = (randdir() + Vector((0, 0, up_bias))).normalized(); L_ = rr(*Lr)
-        leaf(mbt, c + randdir() * L_ * .25, d, randdir(), L_, L_ * Wr, rcol(R.choice(palette), .12), .25, rr(0, .2))
-def core(mbt, c, rad, color):
-    ret = bmesh.ops.create_icosphere(mbt.bm, subdivisions=2, radius=1)
-    for v in ret['verts']: v.co = Vector((c.x + v.co.x * rad[0], c.y + v.co.y * rad[1], c.z + v.co.z * rad[2]))
-    for f in {f for v in ret['verts'] for f in v.link_faces}:
-        for lo in f.loops: lo[mbt.col] = color
-def pine(mbt, mtr):
-    H = rr(9.5, 12.0); top = Vector((rr(-.4, .4), rr(-.4, .4), H * .7))
-    tube(mtr, (0, 0, 0), top, .34, .22, 9)
-    pal = (0x4f6f3a, 0x5b7c41, 0x456533, 0x66864a)
-    for k in range(8):
-        a = k / 8 * 2 * math.pi + rr(-.3, .3); r = rr(1.6, 3.4)
-        end = Vector((math.cos(a) * r, math.sin(a) * r, H * rr(.86, .95)))
-        tube(mtr, top, end, .13, .06, 6)
-    core(mbt, Vector((0, 0, H * .97)), (4.0, 4.0, .75), srgb(0x2f4520))
-    for _ in range(560):
-        a = rr(0, 2 * math.pi); r = 4.7 * math.sqrt(rr(0, 1)); h = H * .97 + (1 - (r / 4.7) ** 2) * .9 * rr(.3, 1) - rr(0, .7)
-        tuft(mbt, Vector((math.cos(a) * r, math.sin(a) * r, h)), 30, (.3, .5), .18, pal, .5)
-def olivet(mbt, mtr):
-    H = rr(3.6, 4.6); base = Vector((0, 0, 0)); fork = Vector((rr(-.3, .3), rr(-.3, .3), 1.3))
-    tube(mtr, base, fork, .32, .24, 9)
-    pal = (0x84946a, 0x738459, 0x9aa781, 0x6c7a52)
-    for k in range(4):
-        a = k * 1.6 + rr(-.3, .3); end = fork + Vector((math.cos(a) * 1.2, math.sin(a) * 1.2, rr(1.2, 1.8))); tube(mtr, fork, end, .14, .07, 6)
-    core(mbt, Vector((0, 0, H * .72)), (1.9, 1.9, 1.0), srgb(0x56634a))
-    for _ in range(300):
-        u = randdir(); c = Vector((u.x * 2.3, u.y * 2.3, H * .72 + u.z * 1.25)) * rr(.7, 1.0)
-        c.z = max(c.z, 1.8); tuft(mbt, c, 34, (.1, .17), .3, pal, .1)
-def cypress(mbt, mtr):
-    H = rr(9, 12); tube(mtr, (0, 0, 0), (0, 0, 1.2), .2, .16, 7)
-    pal = (0x34502a, 0x3f5f30, 0x4a6a36)
-    core(mbt, Vector((0, 0, H * .45)), (.85, .85, H * .45), srgb(0x23361c))
-    for _ in range(600):
-        t = rr(0, 1) ** .8; z = 1.0 + t * (H - 1.0); rad = 1.15 * math.sin(min(1, (1 - t) * 1.3 + .05) * math.pi * .55) * (1 - t * .3)
-        a = rr(0, 2 * math.pi); r = rad * math.sqrt(rr(.3, 1))
-        tuft(mbt, Vector((math.cos(a) * r, math.sin(a) * r, z)), 18, (.16, .26), .4, pal, .8)
-def bigbush(mbt, mtr):
-    pal = (0x5a7a3e, 0x688a46, 0x75894c, 0x858a55)
-    core(mbt, Vector((0, 0, .5)), (.95, .95, .5), srgb(0x34492a))
-    for _ in range(170):
-        u = randdir(); c = Vector((u.x * 1.1, u.y * 1.1, .55 + u.z * .5)) * rr(.75, 1)
-        c.z = max(c.z, .1); tuft(mbt, c, 28, (.1, .16), .5, pal, .2)
-def palmproto(name):
-    palm(name + '_src', 0, 0, rr(7, 10), rr(.03, .1), rr(0, 6), R.randint(10, 999))
-    col = bpy.data.collections.new(name)
-    for suf in ('_trunk', '_fronds'):
-        o = bpy.data.objects[name + '_src' + suf]; COL.objects.unlink(o); col.objects.link(o)
-    proto[name] = col
-R.seed(21)
-for nm, fn in (('pineA', pine), ('pineB', pine), ('oliveA', olivet), ('oliveB', olivet), ('cypress', cypress), ('bushA', bigbush), ('bushB', bigbush)): proto_tree(nm, fn)
-palmproto('palmA'); palmproto('palmB')
 NEIGH = [(-48, 40, 12, 9), (40, 55, 14, 10), (-72, -8, 10, 8), (66, 8, 12, 9), (12, 78, 16, 10), (-30, 85, 12, 8), (90, 60, 12, 9), (-60, -60, 12, 9), (55, -55, 14, 9), (-95, 30, 12, 9)]
-def blocked(x, y, kind_big=True):
-    if -21 < x < 23 and -22 < y < 18: return True
-    if -21 < y < -14: return True   # carretera
-    if -75 < x < 75 and -110 < y < -21: return R.random() > .12 or kind_big   # corredor de cámara casi despejado
-    for (hx, hy, w, d) in NEIGH:
-        if abs(x - hx) < w / 2 + 6 and abs(y - hy) < d / 2 + 8: return True
-    return False
-cnt = 0; tries = 0
-while cnt < 2400 and tries < 120000:
-    tries += 1
-    d = 22 + (rr(0, 1) ** 1.45) * 420; a = rr(0, 2 * math.pi); x, y = math.cos(a) * d * 1.1, math.sin(a) * d
-    kind = R.choices(['pineA', 'pineB', 'oliveA', 'oliveB', 'cypress', 'bushA', 'bushB', 'palmA', 'palmB'], [3, 3, 3.5, 3.5, 1.5, 3, 3, 1, 1])[0]
-    if blocked(x, y, not kind.startswith('bush')): continue
-    e = bpy.data.objects.new('tree%d' % cnt, None); e.instance_type = 'COLLECTION'; e.instance_collection = proto[kind]
-    sc_ = rr(.75, 1.3); e.scale = (sc_, sc_, sc_ * rr(.9, 1.1)); e.rotation_euler.z = rr(0, 6.3); e.location = (x, y, -.02)
-    COL.objects.link(e); cnt += 1
+if not QUICK: exec(open(os.path.join(HERE, 'vegetacion.py')).read())
 # Carretera con aceras
 simple('asphalt', 0x3a3b3c, .85); simple('curb', 0xc9c4ba, .8)
 mb = MB(); mb.box(-1500, 1500, -20.0, -15.6, -.02, .0); mb.obj('road', 'asphalt')
@@ -688,6 +553,7 @@ nt.links.new(cn.outputs['Fac'], ccol.inputs['Fac']); ccol.inputs['Color1'].defau
 skymix = nt.nodes.new('ShaderNodeMixRGB'); nt.links.new(cm2.outputs[0], skymix.inputs['Fac']); nt.links.new(sky.outputs[0], skymix.inputs['Color1']); nt.links.new(ccol.outputs[0], skymix.inputs['Color2'])
 nt.links.new(skymix.outputs[0], bg.inputs[0])
 sun_d = bpy.data.lights.new('sun', 'SUN'); sun_d.energy = 4.2; sun_d.angle = math.radians(.8); sun_d.color = (1.0, .95, .88)
+sun_d.cycles.is_caustics_light = True
 sun = bpy.data.objects.new('sun', sun_d); COL.objects.link(sun)
 # dirección de la luz coherente con el cielo: rotación Z = azimut, X = 90-elevación
 sun.rotation_euler = Euler((math.radians(90 - SUN_EL), 0, math.radians(SUN_AZ - 180)), 'XYZ')
@@ -719,31 +585,32 @@ for k, loc, par in (('roof', (-6.2, 4.6, 7.95), G_ROOF), ('canti', (-9.2, -2.0, 
 r = sc.render; cy = sc.cycles
 r.engine = 'CYCLES'; cy.device = 'CPU'
 cy.use_adaptive_sampling = True; cy.adaptive_threshold = .03; cy.samples = 160; cy.adaptive_min_samples = 8
-cy.use_denoising = True; cy.denoiser = 'OPENIMAGEDENOISE'; cy.denoising_input_passes = 'RGB_ALBEDO_NORMAL'; cy.denoising_prefilter = 'FAST'
+cy.use_denoising = True; cy.denoiser = 'OPENIMAGEDENOISE'; cy.denoising_input_passes = 'RGB_ALBEDO_NORMAL'; cy.denoising_prefilter = 'ACCURATE'
 cy.max_bounces = 8; cy.diffuse_bounces = 2; cy.glossy_bounces = 2; cy.transmission_bounces = 6; cy.volume_bounces = 1; cy.transparent_max_bounces = 8
-cy.caustics_reflective = False; cy.caustics_refractive = False; cy.sample_clamp_indirect = 8; cy.blur_glossy = 1.0
+cy.caustics_reflective = False; cy.caustics_refractive = True; cy.sample_clamp_indirect = 8; cy.blur_glossy = 1.0
 cy.use_light_tree = True
 r.use_persistent_data = True
 sc.view_settings.view_transform = 'AgX'; sc.view_settings.look = 'AgX - Medium High Contrast'; sc.view_settings.exposure = 0.0
 r.film_transparent = False
 r.image_settings.file_format = 'PNG'; r.image_settings.color_depth = '8'
 # ---------------- hierba con partículas de pelo
-m, nt, b = newmat('grass'); M['grass'] = m
-hi = node(nt, 'ShaderNodeHairInfo')
-cr = ramp(nt, hi.outputs['Random'], [(0.0, lin(0x2f5a1b)), (0.45, lin(0x46802a)), (0.8, lin(0x5d9334)), (1.0, lin(0x8a9a45))])
-grad = mix(nt, hi.outputs['Intercept'], lin(0x1d3510), cr, 'MIX')
-L(nt, grad, b.inputs['Base Color']); b.inputs['Roughness'].default_value = .6; b.inputs['Specular IOR Level'].default_value = .4
-tl = node(nt, 'ShaderNodeBsdfTranslucent'); L(nt, cr, tl.inputs['Color'])
-mxg = node(nt, 'ShaderNodeMixShader'); mxg.inputs[0].default_value = .25; L(nt, b.outputs[0], mxg.inputs[1]); L(nt, tl.outputs[0], mxg.inputs[2])
-L(nt, mxg.outputs[0], nt.nodes['Material Output'].inputs['Surface'])
-lawn = bpy.data.objects['lawn']; lawn.data.materials.append(M['grass'])
-# subdividir el césped para repartir mejor las partículas
-bm = bmesh.new(); bm.from_mesh(lawn.data); bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=10, use_grid_fill=True); bm.to_mesh(lawn.data); bm.free()
-md = lawn.modifiers.new('grass', 'PARTICLE_SYSTEM'); st = lawn.particle_systems[-1].settings
-st.type = 'HAIR'; st.count = 70000; st.hair_length = .07; st.emit_from = 'FACE'; st.distribution = 'RAND'; st.use_emit_random = True
-st.use_advanced_hair = True; st.normal_factor = .065; st.factor_random = .025; st.brownian_factor = 0
-st.child_type = 'INTERPOLATED'; st.child_percent = 1; st.rendered_child_count = 14; st.child_radius = .08; st.child_roundness = 1
-st.child_length = 1.0; st.child_length_threshold = .3; st.clump_factor = 0; st.roughness_1 = .012; st.roughness_1_size = 1; st.roughness_endpoint = .025
-st.render_step = 3; st.display_step = 2; st.material = 2
-st.root_radius = 1.0; st.tip_radius = 0.0; st.radius_scale = .0035; st.use_close_tip = True
+if not QUICK:
+    m, nt, b = newmat('grass'); M['grass'] = m
+    hi = node(nt, 'ShaderNodeHairInfo')
+    cr = ramp(nt, hi.outputs['Random'], [(0.0, lin(0x2f5a1b)), (0.45, lin(0x46802a)), (0.8, lin(0x5d9334)), (1.0, lin(0x8a9a45))])
+    grad = mix(nt, hi.outputs['Intercept'], lin(0x1d3510), cr, 'MIX')
+    L(nt, grad, b.inputs['Base Color']); b.inputs['Roughness'].default_value = .6; b.inputs['Specular IOR Level'].default_value = .4
+    tl = node(nt, 'ShaderNodeBsdfTranslucent'); L(nt, cr, tl.inputs['Color'])
+    mxg = node(nt, 'ShaderNodeMixShader'); mxg.inputs[0].default_value = .25; L(nt, b.outputs[0], mxg.inputs[1]); L(nt, tl.outputs[0], mxg.inputs[2])
+    L(nt, mxg.outputs[0], nt.nodes['Material Output'].inputs['Surface'])
+    lawn = bpy.data.objects['lawn']; lawn.data.materials.append(M['grass'])
+    # subdividir el césped para repartir mejor las partículas
+    bm = bmesh.new(); bm.from_mesh(lawn.data); bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=10, use_grid_fill=True); bm.to_mesh(lawn.data); bm.free()
+    md = lawn.modifiers.new('grass', 'PARTICLE_SYSTEM'); st = lawn.particle_systems[-1].settings
+    st.type = 'HAIR'; st.count = 70000; st.hair_length = .07; st.emit_from = 'FACE'; st.distribution = 'RAND'; st.use_emit_random = True
+    st.use_advanced_hair = True; st.normal_factor = .065; st.factor_random = .025; st.brownian_factor = 0
+    st.child_type = 'INTERPOLATED'; st.child_percent = 1; st.rendered_child_count = 14; st.child_radius = .08; st.child_roundness = 1
+    st.child_length = 1.0; st.child_length_threshold = .3; st.clump_factor = 0; st.roughness_1 = .012; st.roughness_1_size = 1; st.roughness_endpoint = .025
+    st.render_step = 3; st.display_step = 2; st.material = 2
+    st.root_radius = 1.0; st.tip_radius = 0.0; st.radius_scale = .0035; st.use_close_tip = True
 print('ESCENA OK', len(bpy.data.objects), 'objetos')

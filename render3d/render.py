@@ -1,5 +1,8 @@
 """Uso: python3 render.py <blend> <outdir> <N> <W> <H> <samples> <frames: 'all' | '0,10,20' | 'a-b'> [step]"""
-import bpy, sys, math, json, os, time
+import bpy, bmesh, sys, math, json, os, time
+import numpy as np
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import olas
 from mathutils import Vector
 from bpy_extras.object_utils import world_to_camera_view
 
@@ -48,18 +51,66 @@ def apply(p, i):
     ob['ROOF'].location.z = 7.0 * s['e']; ob['ROOF'].rotation_euler.y = .03 * s['e']
     ob['UPPER'].location.z = 3.9 * s['e']; ob['WALLS'].location.z = 3.6 * s['e']
     ob['cam'].location = s['cam']; ob['target'].location = s['tgt']; ob['cam'].data.lens = s['lens']
+    if os.environ.get('CAM'):   # pruebas: CAM="x,y,z:tx,ty,tz:focal"
+        c_, t_, f_ = os.environ['CAM'].split(':')
+        ob['cam'].location = [float(v) for v in c_.split(',')]; ob['target'].location = [float(v) for v in t_.split(',')]; ob['cam'].data.lens = float(f_)
     bpy.data.materials['pipe'].node_tree.nodes['Principled BSDF'].inputs['Emission Strength'].default_value = 6 * s['pipe']
     bpy.data.materials['led'].node_tree.nodes['Principled BSDF'].inputs['Emission Strength'].default_value = 12 * s['pool']
     # hierba: menos briznas hijas cuando la cámara está alta (a distancia no se nota)
-    sc.render.use_simplify = True
-    sc.render.simplify_child_particles_render = 1.0 if s['cam'].z < 9 else .25
+    # (solo si cambia: tocarlo en cada fotograma obliga a regenerar toda la hierba)
+    ch = 1.0 if s['cam'].z < 9 else .25
+    if not sc.render.use_simplify: sc.render.use_simplify = True
+    if abs(sc.render.simplify_child_particles_render - ch) > 1e-6: sc.render.simplify_child_particles_render = ch
     bpy.data.lights['poollight'].energy = 450 * s['pool']
-    w = i * .035
-    for mname, nname in (('water', 'WAVE'), ('water', 'WAVE2'), ('spawater', 'WAVE'), ('spawater', 'WAVE2'), ('spawater', 'FOAM')):
-        bpy.data.materials[mname].node_tree.nodes[nname].inputs['W'].default_value = w * (3 if mname == 'spawater' else 1)
-    bpy.data.materials['spawater'].node_tree.nodes['FOAMAMT'].inputs[1].default_value = .35 + .5 * s['boil']
-    bpy.data.materials['pooltile'].node_tree.nodes['CAUS'].inputs['W'].default_value = w * .6
+    t = i * .03   # segundos de "tiempo del agua" por fotograma
+    update_water(t, s['boil'])
     return s
+
+# ---------------- agua: olas reales en la rejilla de la superficie, burbujas y espuma del jacuzzi
+JX, JY = -6.4, -7.2
+JETS = [(JX + 1.0 * math.cos(math.radians(30 + 60 * k)), JY + 1.0 * math.sin(math.radians(30 + 60 * k))) for k in range(6)]
+WATER = {}
+for name in ('water', 'spawater'):
+    if name in ob:
+        me = ob[name].data; co = np.empty(len(me.vertices) * 3); me.vertices.foreach_get('co', co)
+        WATER[name] = co.reshape(-1, 3)
+def _ico():
+    bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=2, radius=1.0)
+    V = np.array([v.co[:] for v in bm.verts]); F = np.array([[v.index for v in f.verts] for f in bm.faces]); bm.free(); return V, F
+ICO_V, ICO_F = _ico()
+BR = np.random.default_rng(17); NB = 1400
+B_JET = BR.integers(0, 7, NB)                     # 6 boquillas + centro
+B_DIR = BR.uniform(-.7, .7, NB); B_SPD = BR.uniform(.18, .42, NB); B_LIFE = BR.uniform(1.0, 2.6, NB)
+B_OFF = BR.uniform(0, 3, NB); B_R = np.exp(BR.uniform(np.log(.0025), np.log(.011), NB)); B_FOAM = BR.random(NB) < .35
+def update_water(t, boil):
+    for name, co in WATER.items():
+        x, y = co[:, 0], co[:, 1]
+        h = olas.waves(x, y, t, olas.POOL) if name == 'water' else olas.spa_height(x, y, t, JX, JY, boil, JETS)
+        new = co.copy(); new[:, 2] = ob[name]['wave_z'] + h
+        ob[name].data.vertices.foreach_set('co', new.ravel()); ob[name].data.update()
+    fo = ob.get('spafoam')
+    if fo is None: return
+    me = fo.data
+    n = int(NB * boil)
+    if n == 0:
+        me.clear_geometry(); return
+    age = (t + B_OFF[:n]) % B_LIFE[:n]
+    jet = B_JET[:n]
+    jx = np.array([p[0] for p in JETS] + [JX])[jet]; jy = np.array([p[1] for p in JETS] + [JY])[jet]
+    base = np.arctan2(JY - jy, JX - jx)
+    ang = np.where(jet == 6, B_DIR[:n] * 4.5, base + B_DIR[:n])
+    d = B_SPD[:n] * age
+    px, py = jx + np.cos(ang) * d, jy + np.sin(ang) * d
+    ok = np.hypot(px - JX, py - JY) < 1.16
+    life = 1 - age / B_LIFE[:n]
+    r = B_R[:n] * np.where(B_FOAM[:n], 1.6, 1.0) * (.55 + .45 * life)
+    px, py, r, foam = px[ok], py[ok], r[ok], B_FOAM[:n][ok]
+    pz = ob['spawater']['wave_z'] + olas.spa_height(px, py, t, JX, JY, boil, JETS)
+    sz = np.where(foam, .45, .8)
+    V = (ICO_V[None] * np.stack([r, r, r * sz], 1)[:, None, :] + np.stack([px, py, pz + r * sz * .25], 1)[:, None, :]).reshape(-1, 3)
+    F = (ICO_F[None] + (np.arange(len(px)) * len(ICO_V))[:, None, None]).reshape(-1, 3)
+    me.clear_geometry(); me.from_pydata(V.tolist(), [], F.tolist()); me.update()
+    me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
 
 r = sc.render; r.resolution_x, r.resolution_y, r.resolution_percentage = W, H, 100
 sc.cycles.samples = SAMP
