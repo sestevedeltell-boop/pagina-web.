@@ -36,8 +36,12 @@
   });
 
   const small = matchMedia('(max-width: 760px)').matches || (screen.width < 900 && devicePixelRatio <= 2);
-  const TIER = small ? 'm' : 'd';
-  const HI_MAX = small ? 30 : 18;   // fotogramas nítidos decodificados a la vez
+  // Full HD en todos los dispositivos; la versión ligera (960×540) solo en móviles con poca memoria o ahorro de datos.
+  // Con #hd en la dirección se fuerza siempre la Full HD.
+  const conn = navigator.connection || {};
+  const lite = small && location.hash !== '#hd' && !!(conn.saveData || (navigator.deviceMemory || 8) < 4);
+  const TIER = lite ? 'm' : 'd';
+  const HI_MAX = lite ? 30 : small ? 12 : 18;   // fotogramas nítidos decodificados a la vez (cada Full HD ocupa ~8 MB)
   const LO_MAX = 60;                // fotogramas de vista previa decodificados a la vez
   const PAR_DECODE = 3, PAR_FETCH = 2;
 
@@ -51,7 +55,7 @@
     : (b) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = URL.createObjectURL(b); });
 
   function resize() {
-    W = canvas.clientWidth; H = canvas.clientHeight; dpr = Math.min(devicePixelRatio || 1, small ? 1.5 : 2);
+    W = canvas.clientWidth; H = canvas.clientHeight; dpr = Math.min(devicePixelRatio || 1, lite ? 1.5 : small ? 3 : 2);
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`); dirty = true;
   }
