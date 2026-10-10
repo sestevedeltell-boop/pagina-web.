@@ -51,6 +51,10 @@ def apply(p, i):
     ob['ROOF'].location.z = 7.0 * s['e']; ob['ROOF'].rotation_euler.y = .03 * s['e']
     ob['UPPER'].location.z = 3.9 * s['e']; ob['WALLS'].location.z = 3.6 * s['e']
     ob['cam'].location = s['cam']; ob['target'].location = s['tgt']; ob['cam'].data.lens = s['lens']
+    if os.environ.get('BORDER'):   # pruebas: BORDER="xmin,xmax,ymin,ymax" (0-1)
+        bx = [float(v) for v in os.environ['BORDER'].split(',')]
+        sc.render.use_border = True; sc.render.use_crop_to_border = True
+        sc.render.border_min_x, sc.render.border_max_x, sc.render.border_min_y, sc.render.border_max_y = bx
     if os.environ.get('CAM'):   # pruebas: CAM="x,y,z:tx,ty,tz:focal"
         c_, t_, f_ = os.environ['CAM'].split(':')
         ob['cam'].location = [float(v) for v in c_.split(',')]; ob['target'].location = [float(v) for v in t_.split(',')]; ob['cam'].data.lens = float(f_)
@@ -61,7 +65,7 @@ def apply(p, i):
     ch = 1.0 if s['cam'].z < 9 else .25
     if not sc.render.use_simplify: sc.render.use_simplify = True
     if abs(sc.render.simplify_child_particles_render - ch) > 1e-6: sc.render.simplify_child_particles_render = ch
-    bpy.data.lights['poollight'].energy = 450 * s['pool']
+    bpy.data.lights['poollight'].energy = 70 * s['pool']
     t = i * .03   # segundos de "tiempo del agua" por fotograma
     update_water(t, s['boil'])
     return s

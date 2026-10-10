@@ -141,19 +141,12 @@ def mosaic(name, palette, band_palette, band_z, water_z, sigma=(.42, .075, .05))
 mosaic('pooltile', [(0, 0x8fd0de), (.34, 0x66c0d3), (.58, 0xb7e3eb), (.78, 0x45a6c4), (.9, 0xe3f3f5)],
        [(0, 0x1f6d8a), (.45, 0x2b84a3), (.8, 0x195a74)], -.27, -.07)
 mosaic('spatile', [(0, 0x9ad5e1), (.4, 0x74c6d6), (.7, 0xc4e8ee), (.88, 0x4fadc8)], [(0, 0x9ad5e1), (1, 0x9ad5e1)], 9., .6)
-# Césped con franjas de corte
+# Base del césped (lo que asoma entre las briznas): verde oscuro con mantillo y tierra
 m, nt, b = newmat('lawn'); M['lawn'] = m
 tc = node(nt, 'ShaderNodeTexCoord'); v = tc.outputs['Object']
-n1 = noise(nt, v, .35, 5); n2 = noise(nt, v, 4, 3); n3 = noise(nt, v, 250, 2)
-wv = node(nt, 'ShaderNodeTexWave'); wv.wave_type = 'BANDS'; wv.bands_direction = 'X'; wv.wave_profile = 'SAW'
-wv.inputs['Scale'].default_value = .4; wv.inputs['Distortion'].default_value = 0; L(nt, v, wv.inputs['Vector'])
-stripe = node(nt, 'ShaderNodeMath'); stripe.operation = 'GREATER_THAN'; stripe.inputs[1].default_value = .5; L(nt, wv.outputs['Fac'], stripe.inputs[0])
-base = ramp(nt, n1.outputs['Fac'], [(0.3, lin(0x3d6b22)), (0.55, lin(0x4f8a2c)), (0.75, lin(0x6a9a3a))])
-c = mix(nt, n2.outputs['Fac'], base, lin(0x5e8e30), 'MIX')
-c = mix(nt, .5, c, lin(0x4a7d26), 'MIX')
-c2 = mix(nt, stripe.outputs[0], c, (0.9, 0.95, 0.85, 1), 'MULTIPLY')
-c3 = mix(nt, n3.outputs['Fac'], c2, lin(0x2c4a17), 'MIX')
-fin = mix(nt, .3, c2, c3, 'MIX'); L(nt, fin, b.inputs['Base Color'])
+n1 = noise(nt, v, .25, 5); n3 = noise(nt, v, 180, 2)
+base = ramp(nt, n1.outputs['Fac'], [(0.3, lin(0x2a3b19)), (0.6, lin(0x384c21)), (0.8, lin(0x48552a))])
+c3 = mix(nt, n3.outputs['Fac'], base, lin(0x3a3223), 'MIX'); fin = mix(nt, .35, base, c3, 'MIX'); L(nt, fin, b.inputs['Base Color'])
 b.inputs['Roughness'].default_value = .95; b.inputs['Specular IOR Level'].default_value = .3
 L(nt, bump(nt, n3.outputs['Fac'], .9, .02), b.inputs['Normal'])
 # Terreno seco exterior con perspectiva aérea
@@ -172,13 +165,13 @@ tc = node(nt, 'ShaderNodeTexCoord'); v = tc.outputs['Object']
 wv = noise(nt, v, .004, 2); dv = node(nt, 'ShaderNodeVectorMath'); dv.operation = 'MULTIPLY_ADD'; dv.inputs[1].default_value = (35, 35, 0)
 L(nt, wv.outputs['Color'], dv.inputs[0]); L(nt, v, dv.inputs[2])
 vo = node(nt, 'ShaderNodeTexVoronoi'); vo.inputs['Scale'].default_value = .018; vo.inputs['Randomness'].default_value = 1; L(nt, dv.outputs[0], vo.inputs['Vector'])
-parc = ramp(nt, vo.outputs['Color'], [(0, lin(0x6b6440)), (.22, lin(0x7a7047)), (.4, lin(0x55603a)), (.58, lin(0x4a5532)), (.75, lin(0x6e573d)), (.9, lin(0x80754d))])
+parc = ramp(nt, vo.outputs['Color'], [(0, lin(0x6e6532)), (.22, lin(0x7e6f36)), (.4, lin(0x4a5a26)), (.58, lin(0x3a4920)), (.75, lin(0x6a4d30)), (.9, lin(0x86793f))])
 parc.node.color_ramp.interpolation = 'CONSTANT'
 n1 = noise(nt, v, .06, 6); n2 = noise(nt, v, .9, 4); n3 = noise(nt, v, 30, 2)
 nf = node(nt, 'ShaderNodeMath'); nf.operation = 'MULTIPLY'; nf.inputs[1].default_value = .45; L(nt, n1.outputs['Fac'], nf.inputs[0])
-c = mix(nt, nf.outputs[0], parc, lin(0x4b5134))
-c = mix(nt, .3, c, ramp(nt, n2.outputs['Fac'], [(0.35, lin(0x56553a)), (0.65, lin(0x76704c))]), 'MIX')
-haze(nt, c, b, 1400.); b.inputs['Roughness'].default_value = 1
+c = mix(nt, nf.outputs[0], parc, lin(0x45522a))
+c = mix(nt, .25, c, ramp(nt, n2.outputs['Fac'], [(0.35, lin(0x55552f)), (0.65, lin(0x7a7040))]), 'MIX')
+haze(nt, c, b, 2600.); b.inputs['Roughness'].default_value = 1
 L(nt, bump(nt, n3.outputs['Fac'], .5, .05), b.inputs['Normal'])
 m, nt, b = newmat('hills'); M['hills'] = m
 tc = node(nt, 'ShaderNodeTexCoord'); n1 = noise(nt, tc.outputs['Object'], .01, 5)
@@ -595,22 +588,34 @@ r.film_transparent = False
 r.image_settings.file_format = 'PNG'; r.image_settings.color_depth = '8'
 # ---------------- hierba con partículas de pelo
 if not QUICK:
+    # Briznas: verdes variados, manchas algo más secas, franjas de corte suaves y base oscura
     m, nt, b = newmat('grass'); M['grass'] = m
-    hi = node(nt, 'ShaderNodeHairInfo')
-    cr = ramp(nt, hi.outputs['Random'], [(0.0, lin(0x2f5a1b)), (0.45, lin(0x46802a)), (0.8, lin(0x5d9334)), (1.0, lin(0x8a9a45))])
-    grad = mix(nt, hi.outputs['Intercept'], lin(0x1d3510), cr, 'MIX')
-    L(nt, grad, b.inputs['Base Color']); b.inputs['Roughness'].default_value = .6; b.inputs['Specular IOR Level'].default_value = .4
-    tl = node(nt, 'ShaderNodeBsdfTranslucent'); L(nt, cr, tl.inputs['Color'])
-    mxg = node(nt, 'ShaderNodeMixShader'); mxg.inputs[0].default_value = .25; L(nt, b.outputs[0], mxg.inputs[1]); L(nt, tl.outputs[0], mxg.inputs[2])
+    hi = node(nt, 'ShaderNodeHairInfo'); tcg = node(nt, 'ShaderNodeTexCoord')
+    green = ramp(nt, hi.outputs['Random'], [(0.0, lin(0x37591e)), (0.35, lin(0x466c27)), (0.7, lin(0x587e2f)), (0.9, lin(0x6a8a36)), (1.0, lin(0x869045))])
+    dryc = ramp(nt, hi.outputs['Random'], [(0.0, lin(0x56602f)), (0.6, lin(0x77783c)), (1.0, lin(0x938c52))])
+    patch = noise(nt, tcg.outputs['Object'], .22, 4)
+    dry = node(nt, 'ShaderNodeMapRange'); dry.inputs['From Min'].default_value = .56; dry.inputs['From Max'].default_value = .78
+    dry.inputs['To Max'].default_value = .55; L(nt, patch.outputs['Fac'], dry.inputs['Value'])
+    col = mix(nt, dry.outputs[0], green, dryc)
+    wv = node(nt, 'ShaderNodeTexWave'); wv.wave_type = 'BANDS'; wv.bands_direction = 'X'; wv.wave_profile = 'SAW'
+    wv.inputs['Scale'].default_value = .4; wv.inputs['Distortion'].default_value = 0; L(nt, tcg.outputs['Object'], wv.inputs['Vector'])
+    stp = node(nt, 'ShaderNodeMath'); stp.operation = 'GREATER_THAN'; stp.inputs[1].default_value = .5; L(nt, wv.outputs['Fac'], stp.inputs[0])
+    stc = node(nt, 'ShaderNodeMapRange'); stc.inputs['To Min'].default_value = .93; stc.inputs['To Max'].default_value = 1.06; L(nt, stp.outputs[0], stc.inputs['Value'])
+    col = mix(nt, 1.0, col, stc.outputs[0], 'MULTIPLY')
+    ip = node(nt, 'ShaderNodeMath'); ip.operation = 'POWER'; ip.inputs[1].default_value = .55; L(nt, hi.outputs['Intercept'], ip.inputs[0])
+    grad = mix(nt, ip.outputs[0], lin(0x17230d), col, 'MIX')
+    L(nt, grad, b.inputs['Base Color']); b.inputs['Roughness'].default_value = .5; b.inputs['Specular IOR Level'].default_value = .45
+    tl = node(nt, 'ShaderNodeBsdfTranslucent'); L(nt, col, tl.inputs['Color'])
+    mxg = node(nt, 'ShaderNodeMixShader'); mxg.inputs[0].default_value = .3; L(nt, b.outputs[0], mxg.inputs[1]); L(nt, tl.outputs[0], mxg.inputs[2])
     L(nt, mxg.outputs[0], nt.nodes['Material Output'].inputs['Surface'])
     lawn = bpy.data.objects['lawn']; lawn.data.materials.append(M['grass'])
     # subdividir el césped para repartir mejor las partículas
     bm = bmesh.new(); bm.from_mesh(lawn.data); bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=10, use_grid_fill=True); bm.to_mesh(lawn.data); bm.free()
     md = lawn.modifiers.new('grass', 'PARTICLE_SYSTEM'); st = lawn.particle_systems[-1].settings
-    st.type = 'HAIR'; st.count = 70000; st.hair_length = .07; st.emit_from = 'FACE'; st.distribution = 'RAND'; st.use_emit_random = True
-    st.use_advanced_hair = True; st.normal_factor = .065; st.factor_random = .025; st.brownian_factor = 0
-    st.child_type = 'INTERPOLATED'; st.child_percent = 1; st.rendered_child_count = 14; st.child_radius = .08; st.child_roundness = 1
-    st.child_length = 1.0; st.child_length_threshold = .3; st.clump_factor = 0; st.roughness_1 = .012; st.roughness_1_size = 1; st.roughness_endpoint = .025
+    st.type = 'HAIR'; st.count = 70000; st.hair_length = .06; st.emit_from = 'FACE'; st.distribution = 'RAND'; st.use_emit_random = True
+    st.use_advanced_hair = True; st.normal_factor = .055; st.factor_random = .022; st.brownian_factor = 0
+    st.child_type = 'INTERPOLATED'; st.child_percent = 1; st.rendered_child_count = 16; st.child_radius = .08; st.child_roundness = 1
+    st.child_length = .95; st.child_length_threshold = .4; st.clump_factor = .1; st.roughness_1 = .012; st.roughness_1_size = 1; st.roughness_endpoint = .022
     st.render_step = 3; st.display_step = 2; st.material = 2
-    st.root_radius = 1.0; st.tip_radius = 0.0; st.radius_scale = .0035; st.use_close_tip = True
+    st.root_radius = 1.0; st.tip_radius = 0.0; st.radius_scale = .004; st.use_close_tip = True
 print('ESCENA OK', len(bpy.data.objects), 'objetos')

@@ -12,7 +12,7 @@ def vdir():
         if .05 < v.length <= 1: return v.normalized()
 
 # ------------------------------------------------------------------ materiales
-def foliage_mat(name, top, bottom=None, transl=.3, rough=.5, spec=.4, hue_var=.04):
+def foliage_mat(name, top, bottom=None, transl=.3, rough=.5, spec=.4, hue_var=.04, val_var=.12):
     """Hoja con color por hoja y por ejemplar, envés distinto (olivo plateado) y luz que la atraviesa."""
     m, nt, b = newmat(name); M[name] = m
     at = node(nt, 'ShaderNodeAttribute'); at.attribute_name = 'leafvar'; at.attribute_type = 'GEOMETRY'
@@ -27,6 +27,9 @@ def foliage_mat(name, top, bottom=None, transl=.3, rough=.5, spec=.4, hue_var=.0
     hs = node(nt, 'ShaderNodeHueSaturation'); L(nt, col, hs.inputs['Color'])
     hh = node(nt, 'ShaderNodeMapRange'); hh.inputs['To Min'].default_value = .5 - hue_var; hh.inputs['To Max'].default_value = .5 + hue_var
     L(nt, oi.outputs['Random'], hh.inputs['Value']); L(nt, hh.outputs[0], hs.inputs['Hue'])
+    wr = node(nt, 'ShaderNodeTexWhiteNoise'); wr.noise_dimensions = '1D'; L(nt, oi.outputs['Random'], wr.inputs['W'])
+    vv = node(nt, 'ShaderNodeMapRange'); vv.inputs['To Min'].default_value = 1 - val_var; vv.inputs['To Max'].default_value = 1 + val_var
+    L(nt, wr.outputs['Value'], vv.inputs['Value']); L(nt, vv.outputs[0], hs.inputs['Value'])
     col = hs.outputs[0]
     L(nt, col, b.inputs['Base Color']); b.inputs['Roughness'].default_value = rough; b.inputs['Specular IOR Level'].default_value = spec
     tl = node(nt, 'ShaderNodeBsdfTranslucent'); L(nt, col, tl.inputs['Color'])
@@ -54,7 +57,7 @@ def bark_mat(name, cols, scale, stretch, fiss=.6, bump_s=.9):
 
 foliage_mat('olive_leaf', [(0, 0x3c4a31), (.45, 0x48563a), (.8, 0x546043), (1, 0x5f694a)],
             [(0, 0x727d66), (.5, 0x808a72), (1, 0x8e977f)], transl=.22, rough=.42, spec=.5)
-foliage_mat('pine_needle', [(0, 0x334a24), (.4, 0x3f5a2b), (.75, 0x4b6631), (1, 0x5d7038)], transl=.3, rough=.55, spec=.35)
+foliage_mat('pine_needle', [(0, 0x334a24), (.4, 0x3f5a2b), (.75, 0x4b6631), (1, 0x5d7038)], transl=.3, rough=.55, spec=.35, hue_var=.06, val_var=.2)
 foliage_mat('cypress_leaf', [(0, 0x1f3319), (.45, 0x29401f), (.8, 0x324a24), (1, 0x3f5529)], transl=.15, rough=.6, spec=.3, hue_var=.025)
 foliage_mat('hedge_leaf', [(0, 0x2f4d1f), (.4, 0x3b5d26), (.75, 0x4a6c2e), (1, 0x5a7a36)], transl=.25, rough=.45, spec=.45)
 foliage_mat('box_leaf', [(0, 0x35541f), (.5, 0x456a28), (1, 0x587a31)], transl=.25, rough=.4, spec=.5)
@@ -179,8 +182,8 @@ PINE = dict(seg=[.5, .35, .25, .15, .09], wob=[.03, .08, .12, .18, .2], trop=[.0
 def pine_tree(bark, lv, hgt, inner=None):
     def sink(pts, rads):
         if inner is not None:   # mata oscura dentro del penacho: copa densa vista desde arriba
-            c = pts[-1] + Vector((0, 0, .05)); rad = vr(.16, .24)
-            for k_ in range(4):
+            c = pts[-1] + Vector((0, 0, .05)); rad = vr(.1, .16)
+            for k_ in range(3):
                 q = c + vdir() * rad * .5
                 tube(inner, [q - Vector((0, 0, rad * .5)), q, q + Vector((0, 0, rad * .4))], [rad * .5, rad, rad * .3], 5)
         n = len(pts)
@@ -344,11 +347,11 @@ if not VEG_ONLY:
     def pine_density(x, y):
         return max(math.exp(-((x - gx) ** 2 + (y - gy) ** 2) / (2 * gr * gr)) for gx, gy, gr in groves)
     cnt = 0; tries = 0
-    while cnt < 520 and tries < 60000:
+    while cnt < 380 and tries < 60000:
         tries += 1
-        d = 24 + (VR.random() ** 1.3) * 430; a = vr(0, 2 * math.pi); x, y = math.cos(a) * d * 1.1, math.sin(a) * d
+        d = 30 + (VR.random() ** .9) * 430; a = vr(0, 2 * math.pi); x, y = math.cos(a) * d * 1.1, math.sin(a) * d
         if blocked(x, y) or VR.random() > .02 + .98 * pine_density(x, y) ** 1.5: continue
-        place('pineA' if VR.random() < .5 else 'pineB', x, y, vr(.8, 1.2)); cnt += 1
+        place('pineA' if VR.random() < .5 else 'pineB', x, y, vr(.7, 1.25)); cnt += 1
     # olivares (hileras de 7 m) en parcelas sueltas
     for _ in range(9):
         cx, cy = vr(-380, 380), vr(-150, 380); ang = vr(0, 3.14); nx_, ny_ = VR.randint(5, 11), VR.randint(4, 9)
