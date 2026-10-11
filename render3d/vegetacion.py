@@ -366,45 +366,58 @@ if not VEG_ONLY:
         place('lavA', -9.4 + i * .45, -11.95 + vr(-.05, .05), vr(.85, 1.1))
     # sombrilla de brezo (paja) con mástil de madera, la típica de piscinas y hoteles: varias capas de briznas,
     # fleco irregular en el borde, varillas de madera debajo y remate en la punta
-    foliage_mat('straw', [(0, 0x5f4c33), (.3, 0x7d6646), (.65, 0x9a835c), (1, 0xb39b72)], transl=.12, rough=.85, spec=.25, hue_var=.03, val_var=.1)
+    foliage_mat('straw', [(0, 0x6a5537), (.3, 0x8a7149), (.6, 0xa58b5e), (.85, 0xbca174), (1, 0x8f7b5c)], transl=.2, rough=.75, spec=.3, hue_var=.02, val_var=.08)
     m, nt, b = newmat('polewood'); M['polewood'] = m
-    tcp = node(nt, 'ShaderNodeTexCoord'); mpp = node(nt, 'ShaderNodeMapping'); mpp.inputs['Scale'].default_value = (40, 40, 2); L(nt, tcp.outputs['Object'], mpp.inputs['Vector'])
-    npw = noise(nt, mpp.outputs[0], 1.0, 6, .6)
-    L(nt, ramp(nt, npw.outputs['Fac'], [(.3, lin(0x6b4a2e)), (.6, lin(0x8c6640)), (.8, lin(0x9f7a50))]), b.inputs['Base Color']); b.inputs['Roughness'].default_value = .6
-    L(nt, bump(nt, npw.outputs['Fac'], .4, .005), b.inputs['Normal'])
-    UX, UY, R_, ZA, ZE = 6.3, -11.0, 1.6, 3.0, 2.36
-    st, wd, mat_ = Geo(), Geo(), Geo()
-    tube(wd, [Vector((UX, UY, .07)), Vector((UX, UY, ZA - .05))], [.06, .05], 14)
-    for k in range(10):
-        a = k / 10 * 2 * math.pi
-        tube(wd, [Vector((UX, UY, ZA - .2)), Vector((UX + math.cos(a) * R_ * .93, UY + math.sin(a) * R_ * .93, ZE + .03))], [.022, .016], 6)
+    if HAVE_PH: pbr(nt, b, 'oak_wood_planks', .6, tint=0xb08a62, tint_fac=1., nstr=1.0, rough=(.45, .7), scale=(1 / .5, 1 / .5, 1 / 1.6))
+    else:
+        tcp = node(nt, 'ShaderNodeTexCoord'); npw = noise(nt, tcp.outputs['Object'], 30, 6, .6)
+        L(nt, ramp(nt, npw.outputs['Fac'], [(.3, lin(0x6b4a2e)), (.8, lin(0x9f7a50))]), b.inputs['Base Color'])
+    UX, UY, R_, ZA, ZE = 6.3, -11.0, 1.6, 2.98, 2.42
+    st, wd, mat_, rope = Geo(), Geo(), Geo(), Geo()
     def cz(r): return ZA - (ZA - ZE) * r / R_
-    n_c = 40
-    for j in range(n_c):   # estera de paja bajo las briznas (que no se vea el cielo a través)
+    # mástil de tronco con ligera conicidad, cubo bajo la copa y 12 varillas
+    tube(wd, [Vector((UX, UY, .07)), Vector((UX + .004, UY, 1.4)), Vector((UX, UY + .003, ZA - .02))], [.065, .06, .055], 16, .04)
+    tube(wd, [Vector((UX, UY, ZA - .42)), Vector((UX, UY, ZA - .3))], [.1, .1], 16)
+    for k in range(12):
+        a = k / 12 * 2 * math.pi + .13
+        tube(wd, [Vector((UX + math.cos(a) * .08, UY + math.sin(a) * .08, ZA - .36)), Vector((UX + math.cos(a) * R_ * .96, UY + math.sin(a) * R_ * .96, cz(R_ * .96) - .03))], [.02, .014], 6)
+    n_c = 48
+    for j in range(n_c):   # estera de caña bajo la paja
         a0, a1 = j / n_c * 2 * math.pi, (j + 1) / n_c * 2 * math.pi
-        for (r0, r1) in ((.05, .8), (.8, R_ * .985)):
-            mat_.face([Vector((UX + math.cos(a0) * r0, UY + math.sin(a0) * r0, cz(r0) - .015)), Vector((UX + math.cos(a1) * r0, UY + math.sin(a1) * r0, cz(r0) - .015)),
-                       Vector((UX + math.cos(a1) * r1, UY + math.sin(a1) * r1, cz(r1) - .015)), Vector((UX + math.cos(a0) * r1, UY + math.sin(a0) * r1, cz(r1) - .015))], .15)
-    for _ in range(26000):
-        r = R_ * math.sqrt(VR.random()) * .99; a = vr(0, 2 * math.pi)
-        out = Vector((math.cos(a), math.sin(a), 0)); slope = (out * (ZA - ZE) / R_ * -1 + Vector((0, 0, 0))).z
-        down = (out + Vector((0, 0, -(ZA - ZE) / R_))).normalized()
-        p = Vector((UX + out.x * r, UY + out.y * r, cz(r) + vr(0, .09)))
-        d = (down + vdir() * .12).normalized(); Ls = vr(.3, .55) * (.6 + .4 * min(1, r / .5))
-        w = vr(.004, .009); side = d.cross(Vector((0, 0, 1))).normalized() * w
-        tip = p + d * Ls
-        st.face([p - side, p + side, tip + side * .4, tip - side * .4], VR.random())
-    for _ in range(5200):   # fleco del borde, más caído e irregular
-        a = vr(0, 2 * math.pi); out = Vector((math.cos(a), math.sin(a), 0))
-        p = Vector((UX + out.x * R_ * vr(.9, 1.0), UY + out.y * R_ * vr(.9, 1.0), ZE + vr(.0, .08)))
-        d = (out * .35 + Vector((0, 0, -1)) + vdir() * .15).normalized(); Ls = vr(.12, .32)
-        side = d.cross(Vector((0, 0, 1))).normalized() * vr(.004, .008); tip = p + d * Ls
-        st.face([p - side, p + side, tip + side * .4, tip - side * .4], VR.random())
-    for _ in range(900):   # remate de la punta
-        d = (Vector((0, 0, 1)) * .6 + vdir() * .7).normalized(); p = Vector((UX, UY, ZA + .02)) + vdir() * .05
-        side = d.orthogonal().normalized() * .005; tip = p + d * vr(.12, .25)
-        st.face([p - side, p + side, tip + side * .4, tip - side * .4], VR.random())
-    st.obj('umbrella_straw', 'straw'); mat_.obj('umbrella_mat', 'straw'); wd.obj('umbrella_wood', 'polewood', smooth=True)
+        for (r0, r1) in ((.06, .6), (.6, 1.15), (1.15, R_ * .99)):
+            mat_.face([Vector((UX + math.cos(a0) * r0, UY + math.sin(a0) * r0, cz(r0) - .012)), Vector((UX + math.cos(a1) * r0, UY + math.sin(a1) * r0, cz(r0) - .012)),
+                       Vector((UX + math.cos(a1) * r1, UY + math.sin(a1) * r1, cz(r1) - .012)), Vector((UX + math.cos(a0) * r1, UY + math.sin(a0) * r1, cz(r1) - .012))], .1 + .05 * (j % 2))
+    # paja en tres capas: cada capa tapa el arranque de la siguiente y termina en un borde recortado
+    TIERS = [(.03, .62, .74, .085), (.52, 1.1, 1.22, .055), (1.0, 1.5, R_ + .04, .025)]   # raíz desde, raíz hasta, borde, altura sobre la estera
+    for ti, (ra, rb, rt, h0) in enumerate(TIERS):
+        n_s = int(16000 * (rt * rt - ra * ra) / (R_ * R_) + 6000)
+        for _ in range(n_s):
+            r0 = math.sqrt(vr(ra * ra, rb * rb)); a = vr(0, 2 * math.pi)
+            out = Vector((math.cos(a), math.sin(a), 0)); tang = Vector((-out.y, out.x, 0))
+            rtip = rt + vr(-.025, .02) + .012 * math.sin(a * 23 + ti)
+            if rtip <= r0 + .08: continue
+            def P(r, lift): return Vector((UX + out.x * r, UY + out.y * r, cz(r) + lift))
+            lift = h0 * vr(.3, 1.0)
+            p0 = P(r0, lift); p1 = P(rtip, lift * .4)
+            if ti == 2:   # el borde exterior cae un poco al final
+                pm_ = P(rtip - .12, lift * .5); p1 = pm_ + (out * .1 + Vector((0, 0, -.11))) * vr(.9, 1.2)
+            else: pm_ = p0.lerp(p1, .7)
+            jit = tang * vr(-.012, .012); w = vr(.0022, .0042)
+            side = tang * w
+            st.face([p0 - side + jit, p0 + side + jit, pm_ + side * .9 + jit, pm_ - side * .9 + jit], VR.random())
+            st.face([pm_ - side * .9 + jit, pm_ + side * .9 + jit, p1 + side * .5 + jit, p1 - side * .5 + jit], VR.random())
+    # remate: haz de paja atado con cuerda en la punta
+    for _ in range(1600):
+        a = vr(0, 2 * math.pi); out = Vector((math.cos(a), math.sin(a), 0)); rb_ = vr(.02, .13)
+        p0 = Vector((UX + out.x * rb_, UY + out.y * rb_, cz(rb_) + .09)); p1 = Vector((UX + out.x * .015, UY + out.y * .015, ZA + .3 + vr(-.02, .02)))
+        side = Vector((-out.y, out.x, 0)) * vr(.002, .0035)
+        st.face([p0 - side, p0 + side, p1 + side * .5, p1 - side * .5], VR.random())
+    ring_ = [Vector((UX + .055 * math.cos(t), UY + .055 * math.sin(t), ZA + .2)) for t in [k / 24 * 2 * math.pi for k in range(25)]]
+    tube(rope, ring_, [.012] * 25, 6)
+    ring_ = [Vector((UX + .035 * math.cos(t), UY + .035 * math.sin(t), ZA + .27)) for t in [k / 24 * 2 * math.pi for k in range(25)]]
+    tube(rope, ring_, [.01] * 25, 6)
+    linen('rope', 0x7a6650)
+    st.obj('umbrella_straw', 'straw'); mat_.obj('umbrella_mat', 'straw'); wd.obj('umbrella_wood', 'polewood', smooth=True); rope.obj('umbrella_rope', 'rope', smooth=True)
 
     # olivos en maceta en el salón, junto al ventanal
     for (x_, y_, s_) in ((-5.2, 1.85, .34), (3.6, 1.65, .28)):
