@@ -364,6 +364,10 @@ if not VEG_ONLY:
             place('lavA', bx + vr(-w, w) * .9, by + vr(-d, d) * .9, vr(.8, 1.2))
     for i in range(14):
         place('lavA', -9.4 + i * .45, -11.95 + vr(-.05, .05), vr(.85, 1.1))
+    # olivos en maceta en el salón, junto al ventanal
+    for (x_, y_, s_) in ((-5.2, 1.85, .34), (3.6, 1.65, .28)):
+        e = place('oliveB', x_, y_, s_, rot=x_)
+        if e: e.location.z = .62; e.parent = G_BASE
     # olivo en maceta dentro del estudio de la planta alta
     e = place('oliveB', .75, 2.5, .3, rot=1.2)
     if e: e.location.z = 4.3; e.parent = G_UPPER

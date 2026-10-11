@@ -438,13 +438,35 @@ mb = MB(); mb.box(-9.6, 6.5, 1.0, 7.2, 0, .3); mb.box(-9.6, 8.9, -3.5, 1.0, 0, .
 mb.obj('terrace', 'tile', .01, G_BASE)
 # Interior planta baja
 mb = MB(); mb.box(-6.4, 4.0, 1.2, 6.9, .3, .31); mb.obj('floor_in', 'tile', 0, G_BASE)
-mb = MB(); mb.cbox(-1.6, 6.2, .52, 5.2, 1.0, .45); mb.cbox(-1.6, 6.62, .9, 5.2, .25, .45); mb.cbox(-4.6, 5.2, .52, 1.0, 2.6, .45)
-soft(mb.obj('sofa', 'fabric', 0, G_BASE), .06, 4)
-mb = MB(); [mb.cbox(x, 6.42, .85, .7, .18, .4) for x in (-2.8, -1.6, -.4)]; soft(mb.obj('cushions', 'fabriclight', 0, G_BASE), .07, 4)
-mb = MB(); mb.cbox(-2.0, 4.8, .315, 4.2, 3.0, .01); mb.obj('rug', 'rug', 0, G_BASE)
-mb = MB(); mb.cbox(-2.0, 4.7, .5, 1.4, .9, .38); mb.obj('coffee', 'marble', .02, G_BASE)
-mb = MB(); mb.cbox(-1.6, 2.4, .58, 4.2, .5, .55); mb.obj('tvunit', 'darkwood', .01, G_BASE)
-mb = MB(); mb.cbox(-1.6, 2.4, 1.95, 2.6, .06, 1.5); mb.obj('tv', 'tv', .005, G_BASE)
+# Salón: sofá modular en L con cojines, alfombra de lana, mesas de centro de piedra, mueble de TV volado con luz
+FZB = .31
+def _bx(name, mat, bx, bev=0., softw=0., segs=3, par=None):
+    m_ = MB()
+    for q in bx: m_.box(*q)
+    o_ = m_.obj(name, mat, bev, par or G_BASE)
+    return soft(o_, softw, segs) if softw else o_
+linen('rug', 0xc8bfae); linen('pillowgreen', 0x8a9178); linen('throwtan', 0xb59a7a)
+_bx('sofabase', 'darkwood', [(-4.1, .9, 5.82, 6.75, FZB, FZB + .1), (-5.1, -4.1, 4.05, 6.75, FZB, FZB + .1)], .008)
+_bx('sofa', 'fabric', [(-4.1 + k * 1.25 + .01, -4.1 + (k + 1) * 1.25 - .01, 5.8, 6.5, FZB + .1, FZB + .29) for k in range(4)] +
+    [(-5.08, -4.12, 4.05, 5.76, FZB + .1, FZB + .29), (-5.08, -4.12, 5.78, 6.5, FZB + .1, FZB + .29)], softw=.06, segs=4)
+_bx('sofaback', 'fabric', [(-4.1 + k * 1.25 + .01, -4.1 + (k + 1) * 1.25 - .01, 6.5, 6.75, FZB + .29, FZB + .78) for k in range(4)] + [(-5.08, -4.12, 6.5, 6.75, FZB + .29, FZB + .78)], softw=.07, segs=4)
+_bx('sofaarm', 'fabric', [(.72, .92, 5.8, 6.75, FZB + .1, FZB + .55)], softw=.05, segs=4)
+for i_, (x_, y_, mat_, rz) in enumerate(((-3.3, 6.32, 'fabriclight', .15), (-2.85, 6.3, 'pillowgreen', -.1), (-.2, 6.32, 'fabriclight', -.2), (-4.65, 6.3, 'blue', .3), (.3, 6.3, 'throwtan', .1))):
+    m_ = MB(); m_.cbox(0, 0, 0, .5, .14, .48); o_ = soft(m_.obj('cushion%d' % i_, mat_, 0, G_BASE), .07, 4)
+    o_.location = (x_, y_, FZB + .53); o_.rotation_euler = (math.radians(-14), 0, rz)
+_bx('rug', 'rug', [(-4.6, .6, 3.4, 6.1, FZB, FZB + .012)])
+simple('stoneblanco', 0xe2dbce, .35, coat=.25)
+m_ = MB(); m_.cyl(-2.15, 4.55, FZB, FZB + .36, .58, 48); m_.cyl(-1.25, 4.05, FZB, FZB + .28, .4, 40); soft(m_.obj('coffee', 'stoneblanco', 0, G_BASE), .015, 2)
+_bx('coffeebooks', 'darkwood', [(-2.45, -2.05, 4.45, 4.75, FZB + .36, FZB + .4)], .004); _bx('coffeebooks2', 'fabriclight', [(-2.42, -2.08, 4.47, 4.73, FZB + .4, FZB + .43)], .004)
+m_ = MB(); m_.cyl(-1.85, 4.62, FZB + .36, FZB + .62, .07, 20, r2=.04); soft(m_.obj('vase', 'black', 0, G_BASE), .01, 2)
+_bx('tvunit', 'darkwood', [(-3.6, .4, 2.12, 2.58, FZB + .25, FZB + .62)], .008)
+m, nt, b = newmat('ledwarm'); M['ledwarm'] = m; b.inputs['Base Color'].default_value = lin(0xffd2a0); b.inputs['Emission Color'].default_value = lin(0xffc58a); b.inputs['Emission Strength'].default_value = 7.
+_bx('tvled', 'ledwarm', [(-3.5, .3, 2.2, 2.5, FZB + .245, FZB + .25)])
+simple('tvback', 0x121212, .55)
+_bx('tv', 'tv', [(-2.45, -.75, 2.385, 2.41, FZB + 1.0, FZB + 1.96)], .004); _bx('tvbackp', 'tvback', [(-2.42, -.78, 2.36, 2.386, FZB + 1.03, FZB + 1.93)], .004)
+_bx('tvstand', 'black', [(-1.65, -1.55, 2.4, 2.46, FZB + .62, FZB + 1.0)])
+_bx('tvdecor', 'stoneblanco', [(-.2, .05, 2.25, 2.45, FZB + .62, FZB + .9)], softw=.02)
+m_ = MB(); m_.cyl(-5.2, 1.85, FZB, .63, .26, 28, r2=.3); m_.cyl(3.6, 1.65, FZB, .63, .26, 28, r2=.3); soft(m_.obj('salonpots', 'concrete', 0, G_BASE), .01, 2)
 mb = MB(); mb.cbox(2.6, 5.2, 1.07, 2.6, 1.1, .06); mb.obj('table', 'oak', .01, G_BASE)
 fr_, cu_, bk_ = MB(), MB(), MB()
 for i in range(3):
@@ -456,13 +478,38 @@ for i in range(3):
         cu_.box(cx - .225, cx + .225, cy - .225, cy + .225, .74, .8); bk_.box(cx - .22, cx + .22, cy - s * .23 - .03, cy - s * .23 + .03, .78, 1.2)
 fr_.obj('chairframes', 'black', .004, G_BASE); soft(cu_.obj('chairs', 'fabriclight', 0, G_BASE), .025, 3); soft(bk_.obj('chairbacks', 'fabric', 0, G_BASE), .025, 3)
 mb = MB(); mb.cbox(1.5, 5.2, .68, .1, .9, .72); mb.cbox(3.7, 5.2, .68, .1, .9, .72)
-for i in range(3): mb.cyl(1.8 + i * .8, 5.2, 2.05, 3.55, .006, 6)
+for i in range(3): mb.cyl(1.8 + i * .8, 5.2, 2.12, 3.6, .004, 6)
 mb.obj('legs', 'black', 0, G_BASE)
-mb = MB()
-for i in range(3): mb.cyl(1.8 + i * .8, 5.2, 1.8, 2.1, .14, 20, r2=.09)
-mb.obj('pendants', 'lamp', 0, G_BASE, smooth=True)
+simple('pendmetal', 0x1c1c1c, .35, .8)
+mb = MB(); ml_ = MB()
+for i in range(3):
+    px_ = 1.8 + i * .8; n_ = 32; rings_ = []
+    for k in range(9):
+        a_ = k / 8 * math.pi / 2; rr2 = .2 * math.sin(a_) + .012; zz = 2.12 - .2 * (1 - math.cos(a_))
+        rings_.append([mb.bm.verts.new((px_ + rr2 * math.cos(t_), 5.2 + rr2 * math.sin(t_), zz)) for t_ in [j / n_ * 2 * math.pi for j in range(n_)]])
+    for k in range(8):
+        for j in range(n_): mb.bm.faces.new((rings_[k][j], rings_[k][(j + 1) % n_], rings_[k + 1][(j + 1) % n_], rings_[k + 1][j]))
+    ml_.cyl(px_, 5.2, 1.935, 1.94, .19, 32)
+soft(mb.obj('pendants', 'pendmetal', 0, G_BASE, recalc=False), .0, 1); ml_.obj('pendlight', 'lamp', 0, G_BASE)
+for i in range(3):
+    pl_ = bpy.data.lights.new('pend%d' % i, 'POINT'); pl_.energy = 22; pl_.shadow_soft_size = .06; pl_.color = (1, .78, .55)
+    po_ = bpy.data.objects.new('pend%d' % i, pl_); po_.location = (1.8 + i * .8, 5.2, 1.98); po_.parent = G_BASE; COL.objects.link(po_)
 mb = MB(); mb.cbox(2.4, 2.9, .76, 3.2, 1.0, .92); mb.cbox(2.85, 6.75, 1.6, 2.3, .6, 2.6); mb.obj('kitchen', 'lacquer', .015, G_BASE)
-mb = MB(); mb.cbox(2.4, 2.9, 1.24, 3.4, 1.1, .04); mb.obj('counter', 'tile', .005, G_BASE)
+mb = MB()
+for k in range(1, 4): mb.box(.8 + k * .8 - .003, .8 + k * .8 + .003, 2.395, 2.4, .32, 1.2)
+for k in range(1, 3): mb.box(1.7 + k * .77 - .003, 1.7 + k * .77 + .003, 6.445, 6.45, .32, 2.88)
+mb.obj('kitchenseams', 'darkwood', 0, G_BASE)
+m, nt, b = newmat('quartz'); M['quartz'] = m
+tcq = node(nt, 'ShaderNodeTexCoord'); nq = noise(nt, tcq.outputs['Object'], 1.8, 8, .62); nq.inputs['Distortion'].default_value = 2.5
+vq = ramp(nt, nq.outputs['Fac'], [(0.0, lin(0xf2f0ec)), (.47, lin(0xf2f0ec)), (.5, lin(0xa8a6a2)), (.53, lin(0xf2f0ec)), (1.0, lin(0xebe8e3))])
+L(nt, vq, b.inputs['Base Color']); b.inputs['Roughness'].default_value = .12; b.inputs['Coat Weight'].default_value = .4
+mb = MB(); mb.cbox(2.4, 2.9, 1.24, 3.4, 1.1, .04); mb.obj('counter', 'quartz', .005, G_BASE)
+mb = MB(); mb.cyl(2.4, 3.25, 1.26, 1.6, .016, 12); mb.box(2.385, 2.415, 2.98, 3.26, 1.57, 1.6); mb.obj('faucet', 'black', 0, G_BASE, smooth=True)
+st_, ss_ = MB(), MB()
+for x_ in (1.3, 2.4, 3.5):
+    for (dx, dy) in ((-.14, -.14), (.14, -.14), (-.14, .14), (.14, .14)): st_.box(x_ + dx - .01, x_ + dx + .01, 1.95 + dy - .01, 1.95 + dy + .01, FZB, .95)
+    st_.box(x_ - .15, x_ + .15, 1.94 - .15, 1.96 - .15, .58, .6); ss_.cyl(x_, 1.95, .95, 1.02, .19, 28)
+st_.obj('stoolframes', 'black', 0, G_BASE); soft(ss_.obj('stoolseats', 'fabric', 0, G_BASE), .02, 3)
 mb = MB()
 for i in range(12): mb.cbox(-5.75, 6.6 - i * .3, .4 + i * .26, 1.1, .3, .07)
 mb.obj('stairs', 'darkwood', .008, G_BASE)
@@ -989,7 +1036,36 @@ def area(name, loc, size, energy, color=(1, .82, .6), parent=None, rot=(0, 0, 0)
     o.visible_camera = False; o.visible_transmission = False; o.visible_glossy = False   # se ve la luz, no el panel
     if parent: o.parent = parent
     return o
-area('in1', (-1.5, 4.5, 3.45), 4.0, 260, parent=G_BASE); area('in2', (2.5, 4.5, 3.45), 3.0, 180, parent=G_BASE)
+area('in1', (-1.5, 4.5, 3.45), 4.0, 70, parent=G_BASE); area('in2', (2.5, 4.5, 3.45), 3.0, 50, parent=G_BASE)
+# focos empotrados (luz cálida de 2.700 K) que dejan círculos de luz en suelo y paredes
+dl_ = MB()
+for (x_, y_) in ((-3.6, 3.3), (-1.6, 3.3), (.4, 3.3), (-3.6, 5.3), (-1.6, 5.3), (.4, 5.3), (1.5, 2.9), (3.3, 2.9), (2.85, 6.2), (-5.6, 2.6), (-5.6, 5.0), (3.5, 4.4)):
+    sd_ = bpy.data.lights.new('spot', 'SPOT'); sd_.energy = 34; sd_.spot_size = math.radians(80); sd_.spot_blend = .55; sd_.shadow_soft_size = .03; sd_.color = (1, .79, .56)
+    so_ = bpy.data.objects.new('spot', sd_); so_.location = (x_, y_, 3.56); so_.parent = G_UPPER; COL.objects.link(so_)
+    dl_.cyl(x_, y_, 3.585, 3.6, .045, 20)
+dl_.obj('ceilspots', 'downlight', 0, G_UPPER)
+mb = MB(); mb.box(-6.3, 3.95, 6.6, 6.9, 3.42, 3.6); mb.obj('ledsoffit', 'render', .005, G_UPPER)
+mb = MB(); mb.box(-6.25, 3.9, 6.84, 6.88, 3.39, 3.41); mb.obj('ledcove', 'ledwarm', 0, G_UPPER)
+mb = MB(); mb.cyl(1.35, 6.35, FZB, FZB + .03, .2, 24); mb.obj('arcbase', 'stoneblanco', 0, G_BASE, smooth=True)
+pts_ = [Vector((1.35 - .9 * math.sin(t * math.pi * .55) * 1.0, 6.35 - 1.2 * math.sin(t * math.pi * .55), FZB + 2.05 * math.sin(t * math.pi * .5 + .0))) for t in [k / 14 for k in range(15)]]
+ap_ = MB()
+for k in range(14):
+    p0, p1 = pts_[k], pts_[k + 1]; n0_ = len(ap_.bm.verts); ap_.cyl(0, 0, 0, 1, .012, 6); ap_.bm.verts.ensure_lookup_table()
+    ax = p1 - p0; rot = ax.to_track_quat('Z', 'Y').to_matrix()
+    for kk in range(n0_, len(ap_.bm.verts)): v = ap_.bm.verts[kk]; v.co = rot @ Vector((v.co.x, v.co.y, v.co.z * ax.length)) + p0
+ap_.obj('arcpole', 'black', 0, G_BASE, smooth=True)
+pe_ = pts_[-1]; mb = MB(); mb.cyl(pe_.x, pe_.y, pe_.z - .22, pe_.z, .2, 32, r2=.06); mb.obj('arcshade', 'pendmetal', 0, G_BASE, smooth=True)
+al_ = bpy.data.lights.new('arclamp', 'POINT'); al_.energy = 30; al_.shadow_soft_size = .06; al_.color = (1, .78, .55)
+ao_ = bpy.data.objects.new('arclamp', al_); ao_.location = (pe_.x, pe_.y, pe_.z - .16); ao_.parent = G_BASE; COL.objects.link(ao_)
+# cortinas finas a los lados del ventanal del salón y cuadro en la pared de la cocina
+for (cx0, cx1) in ((-6.32, -5.65), (3.3, 3.96)):
+    cm_ = MB(); n_ = 60
+    lo_ = [cm_.bm.verts.new((cx0 + (cx1 - cx0) * i / n_, 1.4 + .045 * math.sin(i / n_ * 7 * 2 * math.pi), .33)) for i in range(n_ + 1)]
+    hi_ = [cm_.bm.verts.new((v.co.x, v.co.y, 3.58)) for v in lo_]
+    for i in range(n_): cm_.bm.faces.new((lo_[i], lo_[i + 1], hi_[i + 1], hi_[i]))
+    cm_.obj('gcurtain', 'sheer', 0, G_BASE, smooth=True)
+mb = MB(); mb.box(3.95, 3.99, 3.7, 5.3, 1.35, 2.55); mb.obj('artframe2', 'black', 0, G_BASE)
+mb = MB(); mb.box(3.94, 3.95, 3.76, 5.24, 1.41, 2.49); simple('artcanvas2', 0x8d9a8a, .9); mb.obj('artcanvas2', 'artcanvas2', 0, G_BASE)
 area('in3', (-4.5, 4.0, 6.85), 4.0, 200, parent=G_UPPER); area('in4', (2.5, .9, 6.85), 3.2, 240, parent=G_UPPER)
 pl = bpy.data.lights.new('poollight', 'POINT'); pl.energy = 0; pl.color = (.55, .95, 1); pl.shadow_soft_size = 2.5
 plo = bpy.data.objects.new('poollight', pl); plo.location = (3, -6.6, -.9); COL.objects.link(plo)
