@@ -9,7 +9,7 @@ Estos scripts regeneran la escena y los fotogramas. Todo se ejecuta desde esta c
 
 1. `python3.11 -m pip install bpy==4.2.0 pillow numpy`
 2. `python3.11 textures.py` — genera las texturas propias en `tex/` (no hace falta si ya están en el repositorio)
-3. `python3 polyhaven.py` — descarga el cielo HDRI y las texturas PBR de Poly Haven (CC0) en `ph/`
+3. `python3 polyhaven.py` — descarga el cielo HDRI (kloofendal_48d_partly_cloudy_puresky) y las texturas PBR de Poly Haven (CC0) en `ph/`
    (no se suben al repositorio). Necesita que la red del entorno permita `api.polyhaven.com` y `dl.polyhaven.org`.
    Sin `ph/` la escena funciona igual, con los materiales procedurales anteriores.
 
@@ -35,6 +35,7 @@ Estos scripts regeneran la escena y los fotogramas. Todo se ejecuta desde esta c
 - `scene.py` — casa, materiales, piscina, jacuzzi, carretera, cubierta, interiores, luces, cámara y render.
 - `detalles.py` — cocina exterior (barbacoa, fregadero, puertas y cajones), toallas, mesita con libro y vaso,
   bandeja con jarra y vasos, frutero, macetas con plantas y la estancia de la ventana vertical del volumen blanco.
+- `carretera.py` — coches aparcados, señales, placa de la calle, imbornales, tapas y farolas una a una.
 - `vegetacion.py` — olivos, encinas, pinos piñoneros, cipreses (generados rama a rama), setos, lavanda,
   bosque alrededor (disco de Poisson) y sombrilla de brezo.
 - `olas.py` — oleaje de la piscina y del jacuzzi; `render.py` lo aplica en cada fotograma (el agua se mueve al hacer scroll).
@@ -49,11 +50,8 @@ Además: cristales con capa reflectante (reflejan cielo y árboles), ventana ver
 con estancia detrás, lajas de piedra natural (Poly Haven), cocina exterior completa y objetos de uso
 (toallas, libro, vasos, jarra, limones, macetas).
 
-Ideas pendientes para más realismo (por orden de impacto):
-1. Correderas con tiradores, carriles y hojas que se solapan.
-2. Algo de desgaste y suciedad: terraza y albardilla de la piscina demasiado limpias, marcas de agua.
-3. Seto menos uniforme (huecos y zonas más o menos densas).
-4. Remate del césped contra la terraza (bordillo o pletina).
-5. Luz algo más soleada y cálida, con más contraste.
-6. Bosque con más variedad (claros, caminos), coches y señales en la carretera, más detalle en los montes,
-   sumideros y bajantes en la cubierta.
+Y también: correderas de dos carriles con tiradores, desgaste y marcas de agua, seto irregular, banda de grava con
+pletina junto al césped, cielo soleado (kloofendal_48d), bosque con claros y caminos, montes con relieve, sumideros,
+gárgolas, bajantes y canalón, y carretera con coches aparcados, señales, imbornales y farolas variadas (`carretera.py`).
+
+Ideas pendientes: pocas y menores (por ejemplo, coches con más detalle si se ven de cerca).
