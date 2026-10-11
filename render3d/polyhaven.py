@@ -24,6 +24,7 @@ TEXTURES = {   # nombre -> resolución
     'rough_linen': '2k',            # tela de cojines y colchonetas
     'gravel_floor_02': '2k',        # grava de la cubierta
     'rough_plaster_03': '2k',       # relieve del revoco de la fachada
+    'rough_wood': '2k',             # mástil de la sombrilla (madera agrietada)
 }
 MAPS = {'Diffuse': 'diff', 'nor_gl': 'nor', 'Rough': 'rough'}
 

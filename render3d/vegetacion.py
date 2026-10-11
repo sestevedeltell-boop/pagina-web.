@@ -368,7 +368,7 @@ if not VEG_ONLY:
     # fleco irregular en el borde, varillas de madera debajo y remate en la punta
     foliage_mat('straw', [(0, 0x6a5537), (.3, 0x8a7149), (.6, 0xa58b5e), (.85, 0xbca174), (1, 0x8f7b5c)], transl=.2, rough=.75, spec=.3, hue_var=.02, val_var=.08)
     m, nt, b = newmat('polewood'); M['polewood'] = m
-    if HAVE_PH: pbr(nt, b, 'oak_wood_planks', .6, tint=0xb08a62, tint_fac=1., nstr=1.0, rough=(.45, .7), scale=(1 / .5, 1 / .5, 1 / 1.6))
+    if HAVE_PH: pbr(nt, b, 'rough_wood', .5, tint=0xd8b080, tint_fac=.55, nstr=1.6, rough=(.6, .9), scale=(1 / .45, 1 / .45, 1 / .9))   # tronco de pino pelado, con grietas a lo largo
     else:
         tcp = node(nt, 'ShaderNodeTexCoord'); npw = noise(nt, tcp.outputs['Object'], 30, 6, .6)
         L(nt, ramp(nt, npw.outputs['Fac'], [(.3, lin(0x6b4a2e)), (.8, lin(0x9f7a50))]), b.inputs['Base Color'])
@@ -376,8 +376,13 @@ if not VEG_ONLY:
     st, wd, mat_, rope = Geo(), Geo(), Geo(), Geo()
     def cz(r): return ZA - (ZA - ZE) * r / R_
     # mástil de tronco con ligera conicidad, cubo bajo la copa y 12 varillas
-    tube(wd, [Vector((UX, UY, .07)), Vector((UX + .004, UY, 1.4)), Vector((UX, UY + .003, ZA - .02))], [.065, .06, .055], 16, .04)
-    tube(wd, [Vector((UX, UY, ZA - .42)), Vector((UX, UY, ZA - .3))], [.1, .1], 16)
+    tube(wd, [Vector((UX, UY, .08)), Vector((UX + .006, UY, .9)), Vector((UX + .004, UY + .004, 1.8)), Vector((UX, UY + .003, ZA - .02))], [.105, .1, .095, .088], 28, .035)
+    tube(wd, [Vector((UX, UY, ZA - .44)), Vector((UX, UY, ZA - .3))], [.15, .15], 24)
+    plate = Geo()   # placa de anclaje de acero con tornillos
+    for (x0, x1, y0, y1, z0, z1) in ((UX - .2, UX + .2, UY - .2, UY + .2, .08, .095),) + tuple((UX + dx - .015, UX + dx + .015, UY + dy - .015, UY + dy + .015, .095, .11) for dx in (-.15, .15) for dy in (-.15, .15)):
+        P8 = [Vector(c) for c in ((x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0), (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1))]
+        for q in ((0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)): plate.face([P8[i] for i in q])
+    plate.obj('umbrella_plate', 'black')
     for k in range(12):
         a = k / 12 * 2 * math.pi + .13
         tube(wd, [Vector((UX + math.cos(a) * .08, UY + math.sin(a) * .08, ZA - .36)), Vector((UX + math.cos(a) * R_ * .96, UY + math.sin(a) * R_ * .96, cz(R_ * .96) - .03))], [.02, .014], 6)
