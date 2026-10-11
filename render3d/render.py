@@ -68,7 +68,7 @@ def apply(p, i):
     if not sc.render.use_simplify: sc.render.use_simplify = True
     if abs(sc.render.simplify_child_particles_render - ch) > 1e-6: sc.render.simplify_child_particles_render = ch
     bpy.data.lights['poollight'].energy = 70 * s['pool']
-    t = i * .03   # segundos de "tiempo del agua" por fotograma
+    t = i * .065   # segundos de "tiempo del agua" por fotograma: se nota el movimiento al bajar
     update_water(t, s['boil'])
     return s
 

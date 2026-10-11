@@ -100,6 +100,12 @@ if HAVE_PH:   # revoco: relieve y rugosidad reales, color blanco con un leve mat
     vr_ = node(nt, 'ShaderNodeMapRange'); vr_.inputs['From Min'].default_value = .45; vr_.inputs['From Max'].default_value = .75
     vr_.inputs['To Min'].default_value = .95; vr_.inputs['To Max'].default_value = 1.02; L(nt, bw.outputs[0], vr_.inputs['Value'])
     col = mix(nt, 1.0, col, vr_.outputs[0], 'MULTIPLY')
+    geo_ = node(nt, 'ShaderNodeNewGeometry'); spz = node(nt, 'ShaderNodeSeparateXYZ'); L(nt, geo_.outputs['Position'], spz.inputs[0])
+    dz = node(nt, 'ShaderNodeMapRange'); dz.inputs['From Min'].default_value = .05; dz.inputs['From Max'].default_value = .75
+    dz.inputs['To Min'].default_value = 1; dz.inputs['To Max'].default_value = 0; L(nt, spz.outputs['Z'], dz.inputs['Value'])
+    dn = noise(nt, geo_.outputs['Position'], 6, 5, .6); dd = node(nt, 'ShaderNodeMath'); dd.operation = 'MULTIPLY'; L(nt, dz.outputs[0], dd.inputs[0]); L(nt, dn.outputs['Fac'], dd.inputs[1])
+    dd2 = node(nt, 'ShaderNodeMath'); dd2.operation = 'MULTIPLY'; dd2.inputs[1].default_value = .22; L(nt, dd.outputs[0], dd2.inputs[0])
+    col = mix(nt, dd2.outputs[0], col, lin(0x8a7f6c))
     L(nt, col, b.inputs['Base Color'])
 else:
     L(nt, col, b.inputs['Base Color']); b.inputs['Roughness'].default_value = .88
@@ -307,7 +313,7 @@ def linen(name, tint):
     else:
         b.inputs['Base Color'].default_value = lin(tint); b.inputs['Roughness'].default_value = .95
     b.inputs['Sheen Weight'].default_value = .4; b.inputs['Specular IOR Level'].default_value = .2
-linen('fabric', 0x8e8a84); linen('fabriclight', 0xe9e3d7); linen('blue', 0x7d92a8)
+linen('fabric', 0x8e8a84); linen('fabriclight', 0xe9e3d7); linen('blue', 0x7d92a8); linen('canvas', 0xe6decf)
 simple('rug', 0xc9bfae, 1., spec=.1)
 simple('darkwood', 0x3e2b1f, .45, coat=.2)
 simple('oak', 0xb8875a, .4, coat=.3)
@@ -370,6 +376,13 @@ class MB:
         if parent: ob.parent = parent
         return ob
 
+def soft(ob, w=.03, segs=3):
+    """Bordes redondeados de verdad (cojines, colchonetas): bisel con normales endurecidas y sombreado suave."""
+    for md in list(ob.modifiers):
+        if md.type == 'BEVEL': ob.modifiers.remove(md)
+    md = ob.modifiers.new('bev', 'BEVEL'); md.width = w; md.segments = segs; md.limit_method = 'ANGLE'; md.use_clamp_overlap = True; md.harden_normals = True
+    for p in ob.data.polygons: p.use_smooth = True
+    return ob
 def empty(name):
     e = bpy.data.objects.new(name, None); COL.objects.link(e); return e
 G_ROOF, G_UPPER, G_WALLS, G_BASE = empty('ROOF'), empty('UPPER'), empty('WALLS'), empty('BASE')
@@ -426,17 +439,22 @@ mb.obj('terrace', 'tile', .01, G_BASE)
 # Interior planta baja
 mb = MB(); mb.box(-6.4, 4.0, 1.2, 6.9, .3, .31); mb.obj('floor_in', 'tile', 0, G_BASE)
 mb = MB(); mb.cbox(-1.6, 6.2, .52, 5.2, 1.0, .45); mb.cbox(-1.6, 6.62, .9, 5.2, .25, .45); mb.cbox(-4.6, 5.2, .52, 1.0, 2.6, .45)
-mb.obj('sofa', 'fabric', .06, G_BASE)
-mb = MB(); [mb.cbox(x, 6.42, .85, .7, .18, .4) for x in (-2.8, -1.6, -.4)]; mb.obj('cushions', 'fabriclight', .06, G_BASE)
+soft(mb.obj('sofa', 'fabric', 0, G_BASE), .06, 4)
+mb = MB(); [mb.cbox(x, 6.42, .85, .7, .18, .4) for x in (-2.8, -1.6, -.4)]; soft(mb.obj('cushions', 'fabriclight', 0, G_BASE), .07, 4)
 mb = MB(); mb.cbox(-2.0, 4.8, .315, 4.2, 3.0, .01); mb.obj('rug', 'rug', 0, G_BASE)
 mb = MB(); mb.cbox(-2.0, 4.7, .5, 1.4, .9, .38); mb.obj('coffee', 'marble', .02, G_BASE)
 mb = MB(); mb.cbox(-1.6, 2.4, .58, 4.2, .5, .55); mb.obj('tvunit', 'darkwood', .01, G_BASE)
 mb = MB(); mb.cbox(-1.6, 2.4, 1.95, 2.6, .06, 1.5); mb.obj('tv', 'tv', .005, G_BASE)
 mb = MB(); mb.cbox(2.6, 5.2, 1.07, 2.6, 1.1, .06); mb.obj('table', 'oak', .01, G_BASE)
-mb = MB()
+fr_, cu_, bk_ = MB(), MB(), MB()
 for i in range(3):
-    for s in (-1, 1): mb.cbox(1.7 + i * .9, 5.2 - s * .85, .55, .48, .48, .45); mb.cbox(1.7 + i * .9, 5.2 - s * 1.07, .98, .48, .08, .5)
-mb.obj('chairs', 'fabriclight', .03, G_BASE)
+    for s in (-1, 1):
+        cx, cy = 1.7 + i * .9, 5.2 - s * .85
+        for dx in (-.2, .2):
+            for dy in (-.2, .2): fr_.box(cx + dx - .012, cx + dx + .012, cy + dy - .012, cy + dy + .012, .31, .74)
+        fr_.box(cx - .23, cx + .23, cy - .23, cy + .23, .72, .74)
+        cu_.box(cx - .225, cx + .225, cy - .225, cy + .225, .74, .8); bk_.box(cx - .22, cx + .22, cy - s * .23 - .03, cy - s * .23 + .03, .78, 1.2)
+fr_.obj('chairframes', 'black', .004, G_BASE); soft(cu_.obj('chairs', 'fabriclight', 0, G_BASE), .025, 3); soft(bk_.obj('chairbacks', 'fabric', 0, G_BASE), .025, 3)
 mb = MB(); mb.cbox(1.5, 5.2, .68, .1, .9, .72); mb.cbox(3.7, 5.2, .68, .1, .9, .72)
 for i in range(3): mb.cyl(1.8 + i * .8, 5.2, 2.05, 3.55, .006, 6)
 mb.obj('legs', 'black', 0, G_BASE)
@@ -575,30 +593,157 @@ for (cx0, cx1) in ((WX0 + .08, WX0 + .75), (WX1 - .75, WX1 - .08)):
 mb = MB()
 for i in range(8): mb.cyl(-8.5 + i * 1.6, -1.2, 3.585, 3.6, .07, 16)
 mb.obj('downlights', 'downlight', 0, G_UPPER)
-mb = MB(); mb.cbox(-4.8, 4.6, 4.27, 2.0, 2.2, .5); mb.obj('bed', 'fabriclight', .06, G_UPPER)
-mb = MB(); mb.cbox(-4.8, 4.2, 4.56, 2.0, 1.4, .12); mb.obj('throw', 'pink', .04, G_UPPER)
-mb = MB(); mb.cbox(-4.8, 5.8, 4.6, 2.2, .12, 1.1); mb.cbox(-1.6, 6.5, 5.3, 3.4, .5, 2.6); mb.obj('uwood', 'darkwood', .01, G_UPPER)
-mb = MB(); mb.cyl(-6.3, 5.3, 5.0, 5.35, .16, 20, r2=.1); mb.obj('ulamp', 'lamp', 0, G_UPPER, smooth=True)
+# Dormitorio principal: suelo de roble, pared de lamas, cama tapizada con ropa de cama, mesillas, lámparas,
+# alfombra, banqueta, armario empotrado, rincón de lectura y cortinas
+FZ = 4.035
+def _box(name, mat, bx, bev=0., softw=0., segs=3):
+    m_ = MB()
+    for q in bx: m_.box(*q)
+    o_ = m_.obj(name, mat, bev, G_UPPER)
+    return soft(o_, softw, segs) if softw else o_
+_box('bedfloor', 'floorwood', [(-9.68, -.6, 1.6, 6.8, 4.02, FZ)])
+_box('slatwall', 'darkwood', [(x_, x_ + .045, 6.72, 6.78, FZ, 6.99) for x_ in [-8.0 + k * .06 for k in range(80)]], .003)
+linen('headfab', 0x9d978d); linen('bedwhite', 0xf1eee8); linen('beddark', 0x6f6a63); linen('throwtan', 0xb59a7a)
+_box('bedbase', 'headfab', [(-6.55, -4.65, 4.55, 6.68, FZ + .08, FZ + .36)], softw=.03)
+_box('bedfeet', 'black', [(-6.45, -6.4, 4.65, 4.7, FZ, FZ + .08), (-4.9, -4.85, 4.65, 4.7, FZ, FZ + .08), (-6.45, -6.4, 6.5, 6.55, FZ, FZ + .08), (-4.9, -4.85, 6.5, 6.55, FZ, FZ + .08)])
+_box('mattress', 'bedwhite', [(-6.48, -4.72, 4.6, 6.62, FZ + .36, FZ + .58)], softw=.05, segs=4)
+_box('duvet', 'bedwhite', [(-6.56, -4.64, 4.5, 5.95, FZ + .5, FZ + .64)], softw=.06, segs=4)
+_box('bedthrow', 'throwtan', [(-6.6, -4.6, 4.62, 5.15, FZ + .62, FZ + .67)], softw=.025, segs=3)
+_box('headboard', 'headfab', [(-7.05, -4.15, 6.62, 6.72, FZ + .3, FZ + 1.35)], softw=.04, segs=4)
+for i_, (x_, mat_) in enumerate(((-6.05, 'bedwhite'), (-5.15, 'bedwhite'), (-5.95, 'beddark'), (-5.25, 'beddark'))):
+    m_ = MB(); m_.cbox(0, 0, 0, .62, .16, .42); o_ = soft(m_.obj('pillow%d' % i_, mat_, 0, G_UPPER), .07, 4)
+    o_.location = (x_, 6.42 - (i_ // 2) * .14, FZ + .78 - (i_ // 2) * .02); o_.rotation_euler = (math.radians(-18 + (i_ // 2) * 8), 0, 0)
+_box('nightstands', 'oak', [(-7.55, -7.05, 6.25, 6.68, FZ + .12, FZ + .55), (-4.15, -3.65, 6.25, 6.68, FZ + .12, FZ + .55)], .01)
+_box('nsdrawer', 'darkwood', [(-7.53, -7.07, 6.245, 6.25, FZ + .32, FZ + .33), (-4.13, -3.67, 6.245, 6.25, FZ + .32, FZ + .33)])
+_box('nslegs', 'black', [(x_, x_ + .02, y_, y_ + .02, FZ, FZ + .12) for x_ in (-7.52, -7.1, -4.12, -3.7) for y_ in (6.28, 6.63)])
+m_ = MB(); [m_.cyl(x_, 6.46, FZ + .55, FZ + .85, .07, 20, r2=.05) for x_ in (-7.3, -3.9)]; soft(m_.obj('tlampbase', 'lacquer', 0, G_UPPER), .01, 2)
+m_ = MB(); [m_.cyl(x_, 6.46, FZ + .85, FZ + 1.1, .18, 28, r2=.15) for x_ in (-7.3, -3.9)]; m_.obj('tlampshade', 'lamp', 0, G_UPPER, smooth=True)
+_box('bedrug', 'rug', [(-7.6, -3.6, 3.3, 6.2, FZ, FZ + .012)])
+_box('bench', 'headfab', [(-6.35, -4.85, 4.0, 4.42, FZ + .3, FZ + .46)], softw=.03)
+_box('benchlegs', 'oak', [(x_, x_ + .04, y_, y_ + .04, FZ, FZ + .3) for x_ in (-6.3, -4.94) for y_ in (4.05, 4.33)])
+# armario empotrado de suelo a techo con puertas de roble y tiradores
+_box('wardrobe', 'oak', [(-3.0 + k * .59 + .005, -3.0 + (k + 1) * .59 - .005, 6.2, 6.8, FZ, 6.95) for k in range(4)], .004)
+_box('wardhandles', 'black', [(-3.0 + k * .59 + (.52 if k % 2 == 0 else .05), -3.0 + k * .59 + (.54 if k % 2 == 0 else .07), 6.17, 6.2, 5.0, 5.9) for k in range(4)])
+# rincón de lectura junto al ventanal
+m_ = MB(); m_.cbox(0, 0, .22, .78, .8, .16); m_.cbox(0, .33, .55, .78, .14, .6); m_.cbox(-.36, 0, .4, .1, .8, .3); m_.cbox(.36, 0, .4, .1, .8, .3)
+o_ = soft(m_.obj('bedarmchair', 'fabriclight', 0, G_UPPER), .035, 3); o_.location = (-8.85, 2.45, FZ + .14); o_.rotation_euler.z = math.radians(-145)
+m_ = MB(); [m_.cbox(-8.85 + dx, 2.45 + dy, FZ + .07, .04, .04, .14) for dx in (-.3, .3) for dy in (-.3, .3)]; m_.obj('bedarmlegs', 'oak', 0, G_UPPER)
+m_ = MB(); m_.cyl(-8.05, 2.1, FZ, FZ + .5, .2, 24); m_.obj('sidetable', 'marble', 0, G_UPPER, smooth=True)
+m_ = MB(); m_.cyl(-9.4, 3.1, FZ, FZ + 1.55, .012, 8); m_.cyl(-9.4, 3.1, FZ, FZ + .02, .15, 16); m_.obj('bflamp', 'black', 0, G_UPPER)
+m_ = MB(); m_.cyl(-9.4, 3.1, FZ + 1.45, FZ + 1.72, .2, 24, r2=.16); m_.obj('bflampshade', 'lamp', 0, G_UPPER, smooth=True)
+m_ = MB(); m_.cyl(-1.2, 2.3, FZ, FZ + .45, .24, 24, r2=.28); m_.obj('bedpot', 'concrete', .01, G_UPPER, smooth=True)
+# cuadro en la pared del fondo junto al armario
+_box('artframe', 'black', [(-9.68, -9.64, 3.4, 4.8, 5.0, 6.1)])
+m_ = MB(); m_.box(-9.64, -9.63, 3.46, 4.74, 5.06, 6.04); simple('artcanvas', 0xc9b79c, .9); m_.obj('artcanvas', 'artcanvas', 0, G_UPPER)
+# cortinas finas recogidas a los lados del ventanal del dormitorio
+for (cx0, cx1) in ((-9.6, -8.95), (-1.35, -.7)):
+    cm_ = MB(); n_ = 60
+    lo_ = [cm_.bm.verts.new((cx0 + (cx1 - cx0) * i / n_, 1.78 + .045 * math.sin(i / n_ * 7 * 2 * math.pi), FZ + .03)) for i in range(n_ + 1)]
+    hi_ = [cm_.bm.verts.new((v.co.x, v.co.y, 6.96)) for v in lo_]
+    for i in range(n_): cm_.bm.faces.new((lo_[i], lo_[i + 1], hi_[i + 1], hi_[i]))
+    cm_.obj('bcurtain', 'sheer', 0, G_UPPER, smooth=True)
 # Jardineras en terraza
 mb = MB(); mb.box(-9.5, -8.5, -1.8, -1.2, 4.02, 4.5); mb.box(-2.0, -1.0, -1.8, -1.2, 4.02, 4.5); mb.obj('planters', 'concrete', .01, G_UPPER)
 
-# Cubierta (ROOF)
+# Cubierta (ROOF): losa, petos con albardilla de aluminio, grava, pasillo de losas, castillete con puerta,
+# máquinas de aire acondicionado y placas solares con células, marco y estructura apoyada en la cubierta
+RZ = 7.4
 mb = MB(); mb.box(-10.2, 5.8, -2.2, 7.2, 7.0, 7.36); mb.obj('rslab', 'render', .015, G_ROOF)
 mb = MB(); mb.box(-10.2, 5.8, -2.2, -2.0, 7.36, 7.85); mb.box(-10.2, 5.8, 7.0, 7.2, 7.36, 7.85); mb.box(-10.2, -10.0, -2.0, 7.0, 7.36, 7.85); mb.box(5.6, 5.8, -2.0, 7.0, 7.36, 7.85)
 mb.obj('parapet', 'render', .01, G_ROOF)
-mb = MB(); mb.box(-10.0, 5.6, -2.0, 7.0, 7.36, 7.4); mb.obj('rgravel', 'gravelroof', 0, G_ROOF)
-mb = MB(); mb.box(1.7, 4.7, 3.6, 6.4, 7.36, 9.0); mb.obj('caseton', 'render', .015, G_ROOF)
-panels = MB(); legs = MB()
-for r in range(2):
+simple('copingmetal', 0xa7a9ab, .32, .85)
+mb = MB(); mb.box(-10.23, 5.83, -2.23, -1.97, 7.85, 7.875); mb.box(-10.23, 5.83, 6.97, 7.23, 7.85, 7.875); mb.box(-10.23, -9.97, -1.97, 6.97, 7.85, 7.875); mb.box(5.57, 5.83, -1.97, 6.97, 7.85, 7.875)
+mb.obj('copings', 'copingmetal', .003, G_ROOF)
+m, nt, b = newmat('gravelroof'); M['gravelroof'] = m
+if HAVE_PH: pbr(nt, b, 'gravel_floor_02', 2.0, tint=0xc8c4bc, tint_fac=.4, nstr=1.0, rough=(.85, 1.))
+else: b.inputs['Base Color'].default_value = lin(0xb3ada3); b.inputs['Roughness'].default_value = 1
+mb = MB(); mb.box(-10.0, 5.6, -2.0, 7.0, 7.36, RZ); mb.obj('rgravel', 'gravelroof', 0, G_ROOF)
+mb = MB()
+for k in range(22): mb.box(-9.7 + k * .51, -9.7 + k * .51 + .5, 6.2, 6.7, RZ, RZ + .04)
+for k in range(9): mb.box(.95, 1.45, 6.2 - (k + 1) * .51, 6.2 - (k + 1) * .51 + .5, RZ, RZ + .04)
+mb.obj('roofpavers', 'concrete', .006, G_ROOF)
+# castillete de la escalera (2,4 m sobre la cubierta) con puerta y albardilla
+mb = MB(); mb.box(1.7, 4.7, 3.6, 6.4, 7.36, 9.8); mb.obj('caseton', 'render', .015, G_ROOF)
+mb = MB(); mb.box(1.67, 4.73, 3.57, 6.43, 9.8, 9.825); mb.obj('casetoncap', 'copingmetal', .003, G_ROOF)
+mb = MB(); mb.box(1.675, 1.7, 4.45, 5.4, RZ + .02, RZ + 2.12); mb.obj('roofdoor', 'alu', .004, G_ROOF)
+mb = MB(); mb.box(1.66, 1.675, 5.25, 5.3, RZ + 1.0, RZ + 1.12); mb.obj('roofhandle', 'steel', 0, G_ROOF)
+# aire acondicionado: dos unidades exteriores con rejilla del ventilador, patas y tubos al castillete
+simple('acbody', 0xdcdcd8, .38, .3); simple('acgrille', 0x2a2c2e, .5, .6)
+acb, acg, acf = MB(), MB(), MB()
+for xa in (2.15, 3.45):
+    acb.box(xa, xa + 1.0, 2.25, 2.62, RZ + .1, RZ + .82)
+    acg.cyl(xa + .38, 2.25, RZ + .2, RZ + .72, .0, 3)   # (no usado: marcador)
+    for yy in (2.3, 2.57): acf.box(xa + .05, xa + .95, yy - .03, yy + .03, RZ, RZ + .1)
+acb.obj('acunits', 'acbody', .012, G_ROOF); acf.obj('acfeet', 'black', 0, G_ROOF)
+mb = MB()
+for xa in (2.15, 3.45):
+    n_ = 32; cxg, czg = xa + .4, RZ + .46
+    ring = [mb.bm.verts.new((cxg + .27 * math.cos(a), 2.245, czg + .27 * math.sin(a))) for a in [i / n_ * 2 * math.pi for i in range(n_)]]
+    ctr = mb.bm.verts.new((cxg, 2.24, czg))
+    for i in range(n_): mb.bm.faces.new((ring[i], ring[(i + 1) % n_], ctr))
+mb.obj('acfans', 'acgrille', 0, G_ROOF)
+mb = MB()
+for xa in (2.15, 3.45):
+    for k in range(9): mb.box(xa + .4 - .27, xa + .4 + .27, 2.235, 2.24, RZ + .46 - .27 + k * .066, RZ + .46 - .27 + k * .066 + .008)
+    mb.box(xa + .78, xa + .82, 2.6, 3.62, RZ + .3, RZ + .34); mb.box(xa + .86, xa + .9, 2.6, 3.62, RZ + .38, RZ + .42)
+mb.obj('acbars', 'acgrille', 0, G_ROOF)
+# placas solares: 2 filas de 6 módulos de 1,1 x 1,9 m inclinados 25° hacia el sur, con marco y estructura
+m, nt, b = newmat('pv'); M['pv'] = m
+uvn = node(nt, 'ShaderNodeUVMap'); uvn.uv_map = 'UVMap'; spv = node(nt, 'ShaderNodeSeparateXYZ'); L(nt, uvn.outputs['UV'], spv.inputs[0])
+def pm(op, a, b_=None):
+    n_ = node(nt, 'ShaderNodeMath'); n_.operation = op
+    for k_, x_ in enumerate((a, b_)):
+        if x_ is None: continue
+        if isinstance(x_, (int, float)): n_.inputs[k_].default_value = x_
+        else: L(nt, x_, n_.inputs[k_])
+    return n_.outputs[0]
+u6, v10 = pm('MULTIPLY', spv.outputs['X'], 6), pm('MULTIPLY', spv.outputs['Y'], 10)
+fu, fv = pm('FRACT', u6), pm('FRACT', v10)
+eu = pm('MINIMUM', fu, pm('SUBTRACT', 1., fu)); ev = pm('MINIMUM', fv, pm('SUBTRACT', 1., fv))
+gapu = node(nt, 'ShaderNodeMapRange'); gapu.inputs['From Min'].default_value = .025; gapu.inputs['From Max'].default_value = .035; gapu.inputs['To Min'].default_value = 1; gapu.inputs['To Max'].default_value = 0; L(nt, eu, gapu.inputs['Value'])
+gapv = node(nt, 'ShaderNodeMapRange'); gapv.inputs['From Min'].default_value = .02; gapv.inputs['From Max'].default_value = .03; gapv.inputs['To Min'].default_value = 1; gapv.inputs['To Max'].default_value = 0; L(nt, ev, gapv.inputs['Value'])
+gap = pm('MAXIMUM', gapu.outputs[0], gapv.outputs[0])
+f5 = pm('FRACT', pm('MULTIPLY', fu, 5)); bus = pm('LESS_THAN', pm('ABSOLUTE', pm('SUBTRACT', f5, .5)), .035)
+fin = pm('LESS_THAN', pm('ABSOLUTE', pm('SUBTRACT', pm('FRACT', pm('MULTIPLY', fv, 22)), .5)), .04)
+cmbp = node(nt, 'ShaderNodeCombineXYZ'); L(nt, pm('FLOOR', u6), cmbp.inputs[0]); L(nt, pm('FLOOR', v10), cmbp.inputs[1])
+wnc = node(nt, 'ShaderNodeTexWhiteNoise'); wnc.noise_dimensions = '3D'; L(nt, cmbp.outputs[0], wnc.inputs['Vector'])
+cell = mix(nt, wnc.outputs['Value'], lin(0x0b1322), lin(0x141f36))
+cell = mix(nt, pm('MULTIPLY', fin, .25), cell, lin(0x3a4250))
+cell = mix(nt, pm('MULTIPLY', bus, .8), cell, lin(0x9aa0a6))
+cell = mix(nt, gap, cell, lin(0xd9dde0))
+L(nt, cell, b.inputs['Base Color']); b.inputs['Roughness'].default_value = .25; b.inputs['Metallic'].default_value = .1
+b.inputs['Coat Weight'].default_value = 1.; b.inputs['Coat Roughness'].default_value = .02; b.inputs['Coat IOR'].default_value = 1.52
+simple('pvframe', 0xbfc2c5, .28, 1.)
+bmp = bmesh.new(); uvp = bmp.loops.layers.uv.new('UVMap'); frm = MB(); mnt = MB()
+TILT = math.radians(25); Rt = Matrix.Rotation(TILT, 3, 'X'); PW_, PH_ = 1.1, 1.9
+def pv_place(v, cx, cy, cz): return Rt @ Vector(v) + Vector((cx, cy, cz))
+def beam(mb_, p0, p1, w):
+    d_ = (p1 - p0); ax = d_.normalized(); u_ = ax.orthogonal().normalized() * w / 2; v_ = ax.cross(u_).normalized() * w / 2
+    c0 = [p0 + u_ + v_, p0 - u_ + v_, p0 - u_ - v_, p0 + u_ - v_]; c1 = [c + d_ for c in c0]
+    vs = [mb_.bm.verts.new(c) for c in c0 + c1]
+    for q in ((0, 1, 2, 3), (7, 6, 5, 4), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)): mb_.bm.faces.new([vs[i] for i in q])
+for cy in (5.0, 2.45):
+    cz = RZ + .32 + (PH_ / 2) * math.sin(TILT)
     for c in range(6):
-        cx, cy = -8.6 + c * 1.2, 4.6 - r * 2.2
-        bm = panels.bm; before = set(bm.verts)
-        panels.cbox(cx, cy, 0, 1.1, 1.9, .04)
-        new = [v for v in bm.verts if v not in before]
-        rot = Matrix.Rotation(math.radians(24), 4, 'X')
-        for v in new: v.co = rot @ v.co + Vector((0, 0, 7.85))
-        legs.cbox(cx, cy - .7, 7.55, .04, .04, .4)
-panels.obj('panels', 'panel', .005, G_ROOF); legs.obj('plegs', 'alu', 0, G_ROOF)
+        cx = -8.7 + c * 1.14
+        P = [(-PW_ / 2 + .03, -PH_ / 2 + .03, .0), (PW_ / 2 - .03, -PH_ / 2 + .03, .0), (PW_ / 2 - .03, PH_ / 2 - .03, .0), (-PW_ / 2 + .03, PH_ / 2 - .03, .0)]
+        vs = [bmp.verts.new(pv_place(p, cx, cy, cz)) for p in P]
+        f = bmp.faces.new(vs)
+        for lo, (uu, vv) in zip(f.loops, ((0, 0), (1, 0), (1, 1), (0, 1))): lo[uvp].uv = (uu, vv)
+        # marco de aluminio (4 perfiles) y canto del módulo
+        for (a_, b_) in (((-PW_ / 2, -PH_ / 2), (PW_ / 2, -PH_ / 2)), ((PW_ / 2, -PH_ / 2), (PW_ / 2, PH_ / 2)), ((PW_ / 2, PH_ / 2), (-PW_ / 2, PH_ / 2)), ((-PW_ / 2, PH_ / 2), (-PW_ / 2, -PH_ / 2))):
+            beam(frm, pv_place((a_[0], a_[1], -.012), cx, cy, cz), pv_place((b_[0], b_[1], -.012), cx, cy, cz), .035)
+        beam(frm, pv_place((-PW_ / 2 + .02, 0, -.03), cx, cy, cz), pv_place((PW_ / 2 - .02, 0, -.03), cx, cy, cz), .02)
+    # estructura: largueros bajo los módulos y patas delanteras y traseras sobre zapatas
+    for xs in [-9.2 + k * 1.14 for k in range(7)]:
+        front = pv_place((0, -PH_ / 2 + .15, -.04), 0, cy, cz) + Vector((xs, 0, 0)); back = pv_place((0, PH_ / 2 - .15, -.04), 0, cy, cz) + Vector((xs, 0, 0))
+        beam(mnt, front, back, .04)
+        beam(mnt, Vector((front.x, front.y, RZ + .05)), front, .035); beam(mnt, Vector((back.x, back.y, RZ + .05)), back, .035)
+        beam(mnt, Vector((front.x, front.y, RZ + .05)), back, .025)
+        for p_ in (front, back): mnt.box(p_.x - .12, p_.x + .12, p_.y - .12, p_.y + .12, RZ, RZ + .06)
+mep = bpy.data.meshes.new('panels'); bmp.to_mesh(mep); bmp.free()
+op = bpy.data.objects.new('panels', mep); COL.objects.link(op); mep.materials.append(M['pv']); op.parent = G_ROOF
+frm.obj('pvframes', 'pvframe', 0, G_ROOF); mnt.obj('pvmounts', 'pvframe', 0, G_ROOF)
 
 # ------------------------------------------------------------------ piscina y jacuzzi
 mb = MB()
@@ -693,10 +838,29 @@ for i, x in enumerate((1.0, 2.3, 3.6)):
     mb = MB(); mb.box(-.33, .33, -.36, .36, 0, .08)
     me_o = soft(mb.obj('lback%d' % i, 'fabriclight', 0), .035, 4); me_o.location = (x, -11.12, .5); me_o.rotation_euler = (math.radians(-40), 0, 0)
 mb = MB(); mb.cyl(6.3, -11.0, .08, 2.65, .035, 10); mb.obj('pole', 'alu', 0)
+# sombrilla cuadrada de 3 x 3 m: lona tensada sobre 4 varillas con la tela algo caída entre ellas, faldón y remate
+UX, UY, UZ, UR = 6.3, -11.0, 2.92, 1.5
+def uz(x, y):
+    s_ = max(abs(x), abs(y)) / UR; th = math.atan2(y, x)
+    d_ = abs(((th - math.pi / 4) % (math.pi / 2)) - math.pi / 4) / (math.pi / 4)   # 0 en las varillas (diagonales), 1 entre ellas
+    return UZ - .42 * s_ - .07 * s_ ** 1.3 * d_ ** 1.5
+mb = MB(); n_ = 36
+G_ = [[mb.bm.verts.new((UX + x, UY + y, uz(x, y))) for x in [-UR + 2 * UR * i / n_ for i in range(n_ + 1)]] for y in [-UR + 2 * UR * j / n_ for j in range(n_ + 1)]]
+for j in range(n_):
+    for i in range(n_): mb.bm.faces.new((G_[j][i], G_[j][i + 1], G_[j + 1][i + 1], G_[j + 1][i]))
+edge_ = [G_[0][i] for i in range(n_)] + [G_[j][n_] for j in range(n_)] + [G_[n_][i] for i in range(n_, 0, -1)] + [G_[j][0] for j in range(n_, 0, -1)]
+low_ = [mb.bm.verts.new((v.co.x, v.co.y, v.co.z - .14)) for v in edge_]
+for k in range(len(edge_)): mb.bm.faces.new((edge_[k], edge_[(k + 1) % len(edge_)], low_[(k + 1) % len(low_)], low_[k]))
+o = mb.obj('canopy', 'canvas', 0, smooth=True); o.modifiers.new('sol', 'SOLIDIFY').thickness = .008
 mb = MB()
-apex = mb.bm.verts.new((6.3, -11.0, 2.85)); ring = [mb.bm.verts.new((6.3 + 1.7 * math.cos(a + math.pi / 4), -11.0 + 1.7 * math.sin(a + math.pi / 4), 2.42)) for a in [i / 4 * 2 * math.pi for i in range(4)]]
-for i in range(4): mb.bm.faces.new((apex, ring[i], ring[(i + 1) % 4]))
-o = mb.obj('canopy', 'canvas', 0); o.modifiers.new('sol', 'SOLIDIFY').thickness = .01
+for sx, sy in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+    p0 = Vector((UX, UY, UZ - .06)); p1 = Vector((UX + sx * UR * .98, UY + sy * UR * .98, uz(sx * UR * .98, sy * UR * .98) - .02))
+    n0_ = len(mb.bm.verts); mb.cyl(0, 0, 0, 1, .012, 6); mb.bm.verts.ensure_lookup_table()
+    nv = [mb.bm.verts[k] for k in range(n0_, len(mb.bm.verts))]
+    ax = (p1 - p0); rot = ax.to_track_quat('Z', 'Y').to_matrix()
+    for v in nv: v.co = rot @ Vector((v.co.x, v.co.y, v.co.z * ax.length)) + p0
+mb.cyl(UX, UY, UZ - .2, UZ + .02, .05, 16); mb.cyl(UX, UY, UZ + .02, UZ + .12, .09, 16, r2=.02)
+mb.obj('umbribs', 'alu', 0, smooth=True)
 
 # ------------------------------------------------------------------ vegetación
 NEIGH = []   # sin casas vecinas: la villa está rodeada de bosque

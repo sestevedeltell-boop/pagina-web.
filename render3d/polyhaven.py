@@ -22,6 +22,7 @@ TEXTURES = {   # nombre -> resolución
     'asphalt_04': '2k',             # bordillos de hormigón
     'gravel_road': '2k',            # arcén de tierra y grava
     'rough_linen': '2k',            # tela de cojines y colchonetas
+    'gravel_floor_02': '2k',        # grava de la cubierta
 }
 MAPS = {'Diffuse': 'diff', 'nor_gl': 'nor', 'Rough': 'rough'}
 
