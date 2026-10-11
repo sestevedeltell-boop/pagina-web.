@@ -113,6 +113,32 @@ b.inputs['Roughness'].default_value = .92; L(nt, bump(nt, tn.outputs[0], .5, .02
 m, nt, b = newmat('tile'); M['tile'] = m
 v = objcoord(nt, 2.4); t = img(nt, v, 'tile.jpg'); L(nt, t.outputs[0], b.inputs['Base Color'])
 b.inputs['Roughness'].default_value = .38; L(nt, bump(nt, img(nt, v, 'tile.jpg', True).outputs[0], .15, .005), b.inputs['Normal'])
+def tile_joints(nt, b, tw, th, gap, tone=(.95, 1.04)):
+    """Juntas de piezas rectangulares (coordenadas de objeto X/Y) y tono distinto por pieza."""
+    tcj = node(nt, 'ShaderNodeTexCoord'); spj = node(nt, 'ShaderNodeSeparateXYZ'); L(nt, tcj.outputs['Object'], spj.inputs[0])
+    def m_(op, a, b_=None):
+        n_ = node(nt, 'ShaderNodeMath'); n_.operation = op
+        for k_, x_ in enumerate((a, b_)):
+            if x_ is None: continue
+            if isinstance(x_, (int, float)): n_.inputs[k_].default_value = x_
+            else: L(nt, x_, n_.inputs[k_])
+        return n_.outputs[0]
+    xr = m_('DIVIDE', spj.outputs['X'], tw); yr = m_('DIVIDE', spj.outputs['Y'], th)
+    fx, fy = m_('FRACT', xr), m_('FRACT', yr)
+    ex = m_('MULTIPLY', m_('MINIMUM', fx, m_('SUBTRACT', 1., fx)), tw); ey = m_('MULTIPLY', m_('MINIMUM', fy, m_('SUBTRACT', 1., fy)), th)
+    e = m_('MINIMUM', ex, ey)
+    jm = node(nt, 'ShaderNodeMapRange'); jm.inputs['From Min'].default_value = gap * .5; jm.inputs['From Max'].default_value = gap * .5 + .002; L(nt, e, jm.inputs['Value'])
+    cmbj = node(nt, 'ShaderNodeCombineXYZ'); L(nt, m_('FLOOR', xr), cmbj.inputs[0]); L(nt, m_('FLOOR', yr), cmbj.inputs[1])
+    wnj = node(nt, 'ShaderNodeTexWhiteNoise'); wnj.noise_dimensions = '3D'; L(nt, cmbj.outputs[0], wnj.inputs['Vector'])
+    tn = node(nt, 'ShaderNodeMapRange'); tn.inputs['To Min'].default_value, tn.inputs['To Max'].default_value = tone; L(nt, wnj.outputs['Value'], tn.inputs['Value'])
+    sh = node(nt, 'ShaderNodeMapRange'); sh.inputs['To Min'].default_value = .55; L(nt, jm.outputs[0], sh.inputs['Value'])
+    src = b.inputs['Base Color'].links[0].from_socket
+    c_ = mix(nt, 1.0, src, tn.outputs[0], 'MULTIPLY'); c_ = mix(nt, 1.0, c_, sh.outputs[0], 'MULTIPLY'); L(nt, c_, b.inputs['Base Color'])
+    nsrc = b.inputs['Normal'].links[0].from_socket if b.inputs['Normal'].links else None
+    bp = node(nt, 'ShaderNodeBump'); bp.inputs['Strength'].default_value = .5; bp.inputs['Distance'].default_value = .002; L(nt, jm.outputs[0], bp.inputs['Height'])
+    if nsrc is not None: L(nt, nsrc, bp.inputs['Normal'])
+    L(nt, bp.outputs[0], b.inputs['Normal'])
+tile_joints(nt, b, 1.2, .6, .004)
 # Tarima de ipe
 m, nt, b = newmat('wood'); M['wood'] = m
 v = objcoord(nt, 1.12); v.node.inputs['Scale'].default_value = (1 / 3.6, 1 / .9, 1 / .9)  # tablas largas en X, de unos 11 cm
@@ -270,9 +296,18 @@ b.inputs['Subsurface Weight'].default_value = .4; b.inputs['Subsurface Radius'].
 simple('alu', 0x2a2b2d, .35, .9)
 simple('steel', 0xc9ccd0, .18, 1.)
 simple('black', 0x0e0e0f, .4)
-simple('fabric', 0x8e8a84, .95, spec=.2)
-simple('fabriclight', 0xe7e2d8, .95, spec=.2)
-simple('blue', 0x6f8fbf, .95, spec=.2)
+def linen(name, tint):
+    m, nt, b = newmat(name); M[name] = m
+    if HAVE_PH:
+        pbr(nt, b, 'rough_linen', .27, nstr=.6, rough=(.8, 1.))
+        bw = node(nt, 'ShaderNodeRGBToBW'); L(nt, b.inputs['Base Color'].links[0].from_socket, bw.inputs[0])
+        mr = node(nt, 'ShaderNodeMapRange'); mr.inputs['From Min'].default_value = .3; mr.inputs['From Max'].default_value = .7
+        mr.inputs['To Min'].default_value = .88; mr.inputs['To Max'].default_value = 1.06; L(nt, bw.outputs[0], mr.inputs['Value'])
+        L(nt, mix(nt, 1.0, lin(tint), mr.outputs[0], 'MULTIPLY'), b.inputs['Base Color'])
+    else:
+        b.inputs['Base Color'].default_value = lin(tint); b.inputs['Roughness'].default_value = .95
+    b.inputs['Sheen Weight'].default_value = .4; b.inputs['Specular IOR Level'].default_value = .2
+linen('fabric', 0x8e8a84); linen('fabriclight', 0xe9e3d7); linen('blue', 0x7d92a8)
 simple('rug', 0xc9bfae, 1., spec=.1)
 simple('darkwood', 0x3e2b1f, .45, coat=.2)
 simple('oak', 0xb8875a, .4, coat=.3)
@@ -428,12 +463,34 @@ mb = MB()
 for x in (-1, 1):
     for y in (-.8, -1.6): mb.cbox(x, y, .67, .05, .05, .74)
 mb.obj('olegs', 'alu', 0, G_BASE)
-mb = MB()
+def soft(ob, w=.03, segs=3):
+    """Bordes redondeados de verdad (cojines, colchonetas): bisel con normales endurecidas y sombreado suave."""
+    for md in list(ob.modifiers):
+        if md.type == 'BEVEL': ob.modifiers.remove(md)
+    md = ob.modifiers.new('bev', 'BEVEL'); md.width = w; md.segments = segs; md.limit_method = 'ANGLE'; md.use_clamp_overlap = True; md.harden_normals = True
+    for p in ob.data.polygons: p.use_smooth = True
+    return ob
+fr_, cu_, bk_ = MB(), MB(), MB()
 for i in range(3):
-    for s in (-1, 1): mb.cbox(-.7 + i * .7, -1.2 - s * .75, .51, .45, .45, .42); mb.cbox(-.7 + i * .7, -1.2 - s * .95, .85, .45, .06, .5)
-mb.obj('ochairs', 'fabriclight', .02, G_BASE)
-mb = MB(); mb.cbox(3.0, -.6, .5, 3.2, 1.0, .4); mb.cbox(3.0, -.2, .85, 3.2, .25, .45); mb.obj('osofa', 'fabriclight', .07, G_BASE)
-mb = MB(); [mb.cbox(x, -.4, .95, .55, .14, .5) for x in (2.0, 4.0)]; mb.obj('ocush', 'blue', .06, G_BASE)
+    for s in (-1, 1):
+        cx, cy = -.7 + i * .7, -1.2 - s * .75; ob_ = -s   # el respaldo queda al lado contrario de la mesa
+        for dx in (-.2, .2):
+            for dy in (-.2, .2): fr_.box(cx + dx - .011, cx + dx + .011, cy + dy - .011, cy + dy + .011, .30, .70)
+        fr_.box(cx - .23, cx + .23, cy - .23, cy + .23, .68, .70)
+        for dx in (-.21, .21): fr_.box(cx + dx - .011, cx + dx + .011, cy + ob_ * .22 - .011, cy + ob_ * .22 + .011, .70, 1.1)
+        cu_.box(cx - .22, cx + .22, cy - .22, cy + .22, .70, .765)
+        bk_.box(cx - .205, cx + .205, cy + ob_ * .235 - .028, cy + ob_ * .235 + .028, .80, 1.08)
+fr_.obj('ochairframe', 'black', .004, G_BASE); soft(cu_.obj('ochaircush', 'fabriclight', 0, G_BASE), .025, 3); soft(bk_.obj('ochairback', 'fabriclight', 0, G_BASE), .02, 3)
+mb = MB(); mb.box(1.5, 4.5, -1.08, -.08, .30, .42); mb.obj('osofabase', 'darkwood', .01, G_BASE)
+se_, ba_, ar_ = MB(), MB(), MB()
+for k in range(3):
+    x0 = 1.6 + k * .935
+    se_.box(x0 + .01, x0 + .925, -1.06, -.3, .42, .6); ba_.box(x0 + .01, x0 + .925, -.32, -.1, .58, 1.02)
+ar_.box(1.45, 1.62, -1.08, -.08, .42, .78); ar_.box(4.38, 4.55, -1.08, -.08, .42, .78)
+soft(se_.obj('osofaseat', 'fabriclight', 0, G_BASE), .05, 4); soft(ba_.obj('osofaback', 'fabriclight', 0, G_BASE), .05, 4); soft(ar_.obj('osofaarm', 'fabriclight', 0, G_BASE), .04, 3)
+for (x, rz) in ((2.0, .12), (4.0, -.18)):
+    mb = MB(); mb.cbox(0, 0, 0, .46, .13, .44); o_ = soft(mb.obj('ocush', 'blue', 0, G_BASE), .06, 4)
+    o_.location = (x, -.38, .82); o_.rotation_euler = (math.radians(-12), 0, rz)
 
 # Planta baja: muros, piedra, vidrio (WALLS)
 mb = MB(); mb.box(-9.6, -6.4, 1.0, 7.2, .3, 3.6); mb.obj('stonevol', 'stone', .01, G_WALLS)
@@ -601,18 +658,40 @@ for i in range(n):
     mb.bm.faces.new((outer_b[i], outer_b[j], outer_t[j], outer_t[i])); mb.bm.faces.new((outer_t[i], outer_t[j], inner_t[j], inner_t[i]))
     mi.bm.faces.new((inner_t2[i], inner_t2[j], inner_b2[j], inner_b2[i]))
 mi.bm.faces.new(list(inner_b2))
-mb.obj('spa', 'render', .01, recalc=False)
+simple('spashell', 0x231c16, .9); mb.obj('spa', 'spashell', .01, recalc=False)   # queda detrás de las lamas
 spain = mi.obj('spain', 'spatile', 0, recalc=False); planar_uv(spain, (JX, JY, 1.2)); spain.cycles.is_caustics_receiver = True
 water_sheet('spawater', 'spawater', JX - 1.26, JX + 1.26, JY - 1.26, JY + 1.26, .6, .012, keep=lambda x, y: (x - JX) ** 2 + (y - JY) ** 2 < 1.225 ** 2)
 # burbujas y espuma: render.py las coloca en cada fotograma
 fo = bpy.data.objects.new('spafoam', bpy.data.meshes.new('spafoam')); COL.objects.link(fo); fo.data.materials.append(M['foam'])
 mb = MB(); mb.cbox(JX, JY - 1.85, .17, 1.0, .5, .18); mb.obj('spastep', 'wood', .005)
+# revestimiento de lamas de madera alrededor del jacuzzi y borde de piedra redondeado
+mb = MB(); nl_ = 110
+for k in range(nl_):
+    a0 = k / nl_ * 2 * math.pi; a1 = (k + .86) / nl_ * 2 * math.pi
+    p_ = [(JX + r_ * math.cos(a), JY + r_ * math.sin(a)) for r_ in (1.505, 1.535) for a in (a0, a1)]
+    vs_ = [mb.bm.verts.new((x_, y_, z_)) for z_ in (.09, .6) for (x_, y_) in p_]
+    for q in ((0, 1, 5, 4), (2, 6, 7, 3), (0, 4, 6, 2), (1, 3, 7, 5), (4, 5, 7, 6)): mb.bm.faces.new([vs_[i] for i in q])
+mb.obj('spaslats', 'wood', 0)
+mb = MB(); n_ = 160
+ro = [mb.bm.verts.new((JX + 1.58 * math.cos(a), JY + 1.58 * math.sin(a), z_)) for z_ in (.615, .715) for a in [i / n_ * 2 * math.pi for i in range(n_)]]
+ri = [mb.bm.verts.new((JX + 1.17 * math.cos(a), JY + 1.17 * math.sin(a), z_)) for z_ in (.615, .715) for a in [i / n_ * 2 * math.pi for i in range(n_)]]
+for i in range(n_):
+    j = (i + 1) % n_
+    mb.bm.faces.new((ro[i], ro[j], ro[n_ + j], ro[n_ + i])); mb.bm.faces.new((ri[n_ + i], ri[n_ + j], ri[j], ri[i]))
+    mb.bm.faces.new((ro[n_ + i], ro[n_ + j], ri[n_ + j], ri[n_ + i])); mb.bm.faces.new((ri[i], ri[j], ro[j], ro[i]))
+soft(mb.obj('spacoping', 'tile', 0), .02, 3)
 # Tumbonas, sombrilla
+simple('whitemetal', 0xe6e6e2, .3, .7)
 for i, x in enumerate((1.0, 2.3, 3.6)):
-    mb = MB(); mb.cbox(x, -10.4, .2, .75, 2.0, .2); mb.obj('lounger%d' % i, 'lacquer', .03)
-    mb = MB(); mb.cbox(x, -10.15, .36, .68, 1.35, .1); mb.obj('lcush%d' % i, 'fabriclight', .04)
-    mb = MB(); mb.cbox(0, 0, 0, .68, .75, .1)
-    me_o = mb.obj('lback%d' % i, 'fabriclight', .04); me_o.location = (x, -11.05, .56); me_o.rotation_euler = (math.radians(-45), 0, 0)
+    mb = MB()
+    for sx in (-1, 1):
+        mb.box(x + sx * .34 - .02, x + sx * .34 + .02, -11.35, -9.4, .22, .26)
+        for yy in (-11.3, -9.45): mb.box(x + sx * .34 - .02, x + sx * .34 + .02, yy - .02, yy + .02, .08, .24)
+    for yy in (-11.35, -9.4): mb.box(x - .36, x + .36, yy - .02, yy + .02, .22, .26)
+    mb.obj('lounger%d' % i, 'whitemetal', .006)
+    mb = MB(); mb.box(x - .33, x + .33, -10.85, -9.42, .26, .34); soft(mb.obj('lcush%d' % i, 'fabriclight', 0), .035, 4)
+    mb = MB(); mb.box(-.33, .33, -.36, .36, 0, .08)
+    me_o = soft(mb.obj('lback%d' % i, 'fabriclight', 0), .035, 4); me_o.location = (x, -11.12, .5); me_o.rotation_euler = (math.radians(-40), 0, 0)
 mb = MB(); mb.cyl(6.3, -11.0, .08, 2.65, .035, 10); mb.obj('pole', 'alu', 0)
 mb = MB()
 apex = mb.bm.verts.new((6.3, -11.0, 2.85)); ring = [mb.bm.verts.new((6.3 + 1.7 * math.cos(a + math.pi / 4), -11.0 + 1.7 * math.sin(a + math.pi / 4), 2.42)) for a in [i / 4 * 2 * math.pi for i in range(4)]]
@@ -622,14 +701,84 @@ o = mb.obj('canopy', 'canvas', 0); o.modifiers.new('sol', 'SOLIDIFY').thickness 
 # ------------------------------------------------------------------ vegetación
 NEIGH = []   # sin casas vecinas: la villa está rodeada de bosque
 if not QUICK: exec(open(os.path.join(HERE, 'vegetacion.py')).read())
-# Carretera con aceras
-simple('asphalt', 0x3a3b3c, .85); simple('curb', 0xc9c4ba, .8)
-mb = MB(); mb.box(-1500, 1500, -20.0, -15.6, -.02, .0); mb.obj('road', 'asphalt')
-mb = MB(); mb.box(-1500, 1500, -15.6, -14.0, -.02, .12); mb.box(-1500, 1500, -21.6, -20.0, -.02, .12); mb.obj('sidewalk', 'curb', .01)
-mb = MB()
-x = -300
-while x < 300: mb.box(x, x + 3, -17.85, -17.75, 0, .003); x += 6
-simple('paint', 0xe8e6df, .6); mb.obj('roadline', 'paint')
+# Carretera: asfalto envejecido de dos carriles (6,2 m), líneas pintadas algo gastadas, rodadas, parches y manchas;
+# bordillo y acera de adoquín junto a la parcela, arcén de tierra y grava al otro lado, y farolas
+RY0, RY1 = -21.6, -15.4; RYC = (RY0 + RY1) / 2
+def mth_(nt, op, a, b_=None):
+    n_ = node(nt, 'ShaderNodeMath'); n_.operation = op
+    for k_, x_ in enumerate((a, b_)):
+        if x_ is None: continue
+        if isinstance(x_, (int, float)): n_.inputs[k_].default_value = x_
+        else: L(nt, x_, n_.inputs[k_])
+    return n_.outputs[0]
+def band(nt, y, center, half, soft):
+    """1 dentro de la franja |y-center|<half, con borde suave."""
+    d = mth_(nt, 'ABSOLUTE', mth_(nt, 'SUBTRACT', y, center))
+    mr = node(nt, 'ShaderNodeMapRange'); mr.inputs['From Min'].default_value = half; mr.inputs['From Max'].default_value = half + soft
+    mr.inputs['To Min'].default_value = 1; mr.inputs['To Max'].default_value = 0; L(nt, d, mr.inputs['Value']); return mr.outputs[0]
+m, nt, b = newmat('asphalt'); M['asphalt'] = m
+if HAVE_PH:
+    d = pbr(nt, b, 'asphalt_02', 3.0, nstr=.9, rough=(.72, .95))
+    base = mix(nt, 1.0, d, lin(0xb4b4b0), 'MULTIPLY')
+else:
+    base = lin(0x3a3b3c); b.inputs['Roughness'].default_value = .85
+tc = node(nt, 'ShaderNodeTexCoord'); sp = node(nt, 'ShaderNodeSeparateXYZ'); L(nt, tc.outputs['Object'], sp.inputs[0]); X_, Y_ = sp.outputs['X'], sp.outputs['Y']
+big = noise(nt, tc.outputs['Object'], .06, 4); col = mix(nt, .35, base, mix(nt, big.outputs['Fac'], lin(0x7a7a76), lin(0xc8c8c2)), 'MULTIPLY')
+# parches de reparación (rectángulos más oscuros y lisos)
+cx = mth_(nt, 'FLOOR', mth_(nt, 'DIVIDE', X_, 7.0)); cy = mth_(nt, 'FLOOR', mth_(nt, 'DIVIDE', Y_, 3.1))
+cmb = node(nt, 'ShaderNodeCombineXYZ'); L(nt, cx, cmb.inputs[0]); L(nt, cy, cmb.inputs[1])
+wnp = node(nt, 'ShaderNodeTexWhiteNoise'); wnp.noise_dimensions = '3D'; L(nt, cmb.outputs[0], wnp.inputs['Vector'])
+fxp = mth_(nt, 'FRACT', mth_(nt, 'DIVIDE', X_, 7.0)); fyp = mth_(nt, 'FRACT', mth_(nt, 'DIVIDE', Y_, 3.1))
+inside = mth_(nt, 'MULTIPLY', mth_(nt, 'MULTIPLY', mth_(nt, 'GREATER_THAN', fxp, .15), mth_(nt, 'LESS_THAN', fxp, .7)),
+              mth_(nt, 'MULTIPLY', mth_(nt, 'GREATER_THAN', fyp, .1), mth_(nt, 'LESS_THAN', fyp, .85)))
+patch = mth_(nt, 'MULTIPLY', inside, mth_(nt, 'GREATER_THAN', wnp.outputs['Value'], .88))
+col = mix(nt, patch, col, mix(nt, .5, col, lin(0x3a3a3a), 'MULTIPLY'))
+# rodadas: franjas algo más oscuras y pulidas; manchas de aceite en el centro de cada carril
+tracks = mth_(nt, 'MAXIMUM', mth_(nt, 'MAXIMUM', band(nt, Y_, RYC + 1.55 + .85, .28, .25), band(nt, Y_, RYC + 1.55 - .85, .28, .25)),
+              mth_(nt, 'MAXIMUM', band(nt, Y_, RYC - 1.55 + .85, .28, .25), band(nt, Y_, RYC - 1.55 - .85, .28, .25)))
+col = mix(nt, mth_(nt, 'MULTIPLY', tracks, .35), col, mix(nt, 1.0, col, lin(0xb0b0b0), 'MULTIPLY'))
+oil = noise(nt, tc.outputs['Object'], 1.6, 3)
+oilm = node(nt, 'ShaderNodeMapRange'); oilm.inputs['From Min'].default_value = .6; oilm.inputs['From Max'].default_value = .72; L(nt, oil.outputs['Fac'], oilm.inputs['Value'])
+lanec = mth_(nt, 'MAXIMUM', band(nt, Y_, RYC + 1.55, .35, .3), band(nt, Y_, RYC - 1.55, .35, .3))
+col = mix(nt, mth_(nt, 'MULTIPLY', mth_(nt, 'MULTIPLY', oilm.outputs[0], lanec), .45), col, lin(0x1a1a1a))
+# tierra y polvo hacia los bordes
+edge = mth_(nt, 'MAXIMUM', band(nt, Y_, RY0, .05, .6), band(nt, Y_, RY1, .05, .45))
+col = mix(nt, mth_(nt, 'MULTIPLY', edge, .45), col, lin(0x6e6250))
+# marcas viales: eje discontinuo (4,5 m de línea cada 12 m) y líneas de borde continuas, con desgaste
+dash = mth_(nt, 'LESS_THAN', mth_(nt, 'FRACT', mth_(nt, 'DIVIDE', X_, 12.0)), .375)
+paint = mth_(nt, 'MAXIMUM', mth_(nt, 'MULTIPLY', band(nt, Y_, RYC, .05, .012), dash),
+             mth_(nt, 'MAXIMUM', band(nt, Y_, RY1 - .3, .05, .012), band(nt, Y_, RY0 + .3, .05, .012)))
+wear = noise(nt, tc.outputs['Object'], 7.0, 5, .65)
+wm = node(nt, 'ShaderNodeMapRange'); wm.inputs['From Min'].default_value = .38; wm.inputs['From Max'].default_value = .55; L(nt, wear.outputs['Fac'], wm.inputs['Value'])
+paint = mth_(nt, 'MULTIPLY', paint, wm.outputs[0])
+col = mix(nt, mth_(nt, 'MULTIPLY', paint, .9), col, lin(0xdedcd3))
+L(nt, col, b.inputs['Base Color'])
+rr_ = b.inputs['Roughness'].links[0].from_socket if b.inputs['Roughness'].links else None
+if rr_ is not None:
+    r2 = mth_(nt, 'SUBTRACT', rr_, mth_(nt, 'ADD', mth_(nt, 'MULTIPLY', tracks, .12), mth_(nt, 'MULTIPLY', paint, .25)))
+    L(nt, r2, b.inputs['Roughness'])
+mb = MB(); mb.box(-1500, 1500, RY0, RY1, -.02, .0); mb.obj('road', 'asphalt')
+# bordillo de hormigón y acera de adoquín junto a la parcela
+m, nt, b = newmat('curb'); M['curb'] = m
+if HAVE_PH: pbr(nt, b, 'asphalt_04', 1.5, tint=0xd8d6d0, tint_fac=.5, nstr=.8, rough=(.7, .9))
+else: b.inputs['Base Color'].default_value = lin(0xc9c4ba)
+mb = MB(); mb.box(-1500, 1500, RY1, RY1 + .16, -.02, .15); mb.obj('curbs', 'curb', .012)
+m, nt, b = newmat('pavers'); M['pavers'] = m
+if HAVE_PH: pbr(nt, b, 'concrete_pavers', 1.6, tint=0xd2cfc8, tint_fac=.35, nstr=1.0, rough=(.75, .95))
+else: b.inputs['Base Color'].default_value = lin(0xb8b2a6)
+mb = MB(); mb.box(-1500, 1500, RY1 + .16, -13.66, -.02, .13); mb.obj('sidewalk', 'pavers', .004)
+# arcén de tierra y grava al otro lado
+m, nt, b = newmat('shoulder'); M['shoulder'] = m
+if HAVE_PH: pbr(nt, b, 'gravel_road', 2.0, nstr=1.0, rough=(.85, 1.))
+else: b.inputs['Base Color'].default_value = lin(0x7a6a52)
+mb = MB(); mb.box(-1500, 1500, RY0 - 1.3, RY0, -.025, -.004); mb.obj('roadshoulder', 'shoulder')
+# farolas en la acera (fuste gris oscuro de 6 m, brazo y luminaria plana)
+simple('lampmetal', 0x3a3c3e, .45, .8); simple('lampglass', 0xe8ecef, .15)
+pole, head, glass_ = MB(), MB(), MB()
+for xl in [14 + 34 * k for k in range(-6, 6)]:
+    pole.cyl(xl, RY1 + .45, .13, 6.2, .075, 12, r2=.05); pole.box(xl - .03, xl + .03, RY1 - .7, RY1 + .45, 6.12, 6.18)
+    head.box(xl - .2, xl + .2, RY1 - 1.15, RY1 - .55, 6.06, 6.16); glass_.box(xl - .17, xl + .17, RY1 - 1.12, RY1 - .58, 6.05, 6.06)
+pole.obj('lampposts', 'lampmetal', .006, smooth=True); head.obj('lampheads', 'lampmetal', .01); glass_.obj('lampglass', 'lampglass', 0)
 # ------------------------------------------------------------------ luces, cielo, cámara
 SUN_EL, SUN_AZ = 33, 145   # sun_rotation: 0=+Y, 90=+X -> sol delante-derecha
 if HAVE_PH:
@@ -673,7 +822,7 @@ sun.rotation_euler = Euler((math.radians(90 - SUN_EL), 0, math.radians(SUN_AZ - 
 def area(name, loc, size, energy, color=(1, .82, .6), parent=None, rot=(0, 0, 0)):
     d = bpy.data.lights.new(name, 'AREA'); d.energy = energy; d.size = size; d.color = color
     o = bpy.data.objects.new(name, d); o.location = loc; o.rotation_euler = rot; COL.objects.link(o)
-    o.visible_camera = False   # se ve la luz, no el panel
+    o.visible_camera = False; o.visible_transmission = False; o.visible_glossy = False   # se ve la luz, no el panel
     if parent: o.parent = parent
     return o
 area('in1', (-1.5, 4.5, 3.45), 4.0, 260, parent=G_BASE); area('in2', (2.5, 4.5, 3.45), 3.0, 180, parent=G_BASE)
@@ -706,6 +855,18 @@ r.use_persistent_data = True
 sc.view_settings.view_transform = 'AgX'; sc.view_settings.look = 'AgX - Medium High Contrast'; sc.view_settings.exposure = 0.0
 r.film_transparent = False
 r.image_settings.file_format = 'PNG'; r.image_settings.color_depth = '8'
+sc.use_nodes = True; r.use_compositing = True; ct = sc.node_tree
+for n_ in list(ct.nodes): ct.nodes.remove(n_)
+rl = ct.nodes.new('CompositorNodeRLayers'); gl = ct.nodes.new('CompositorNodeGlare'); gl.glare_type = 'FOG_GLOW'; gl.quality = 'HIGH'; gl.threshold = 1.2; gl.mix = -.9; gl.size = 7
+ld = ct.nodes.new('CompositorNodeLensdist'); ld.use_fit = True; ld.inputs['Dispersion'].default_value = .005
+em = ct.nodes.new('CompositorNodeEllipseMask'); em.width = 1.15; em.height = 1.05
+bl = ct.nodes.new('CompositorNodeBlur'); bl.filter_type = 'FAST_GAUSS'; bl.use_relative = True; bl.factor_x = 30; bl.factor_y = 30
+vm = ct.nodes.new('CompositorNodeMapRange'); vm.inputs['To Min'].default_value = .8; vm.inputs['To Max'].default_value = 1.0
+mx_ = ct.nodes.new('CompositorNodeMixRGB'); mx_.blend_type = 'MULTIPLY'
+co = ct.nodes.new('CompositorNodeComposite')
+ct.links.new(rl.outputs['Image'], gl.inputs['Image']); ct.links.new(gl.outputs['Image'], ld.inputs['Image'])
+ct.links.new(em.outputs['Mask'], bl.inputs['Image']); ct.links.new(bl.outputs['Image'], vm.inputs['Value'])
+ct.links.new(ld.outputs['Image'], mx_.inputs[1]); ct.links.new(vm.outputs['Value'], mx_.inputs[2]); ct.links.new(mx_.outputs['Image'], co.inputs['Image'])
 # ---------------- hierba con partículas de pelo
 if not QUICK:
     # Briznas: verdes variados, manchas algo más secas, franjas de corte suaves y base oscura

@@ -17,6 +17,11 @@ TEXTURES = {   # nombre -> resolución
     'chinese_cedar_bark': '1k',     # ciprés
     'aerial_grass_rock': '2k',      # campo visto desde lejos
     'grass_ground': '2k',           # base del césped
+    'asphalt_02': '2k',             # carretera
+    'concrete_pavers': '2k',        # acera
+    'asphalt_04': '2k',             # bordillos de hormigón
+    'gravel_road': '2k',            # arcén de tierra y grava
+    'rough_linen': '2k',            # tela de cojines y colchonetas
 }
 MAPS = {'Diffuse': 'diff', 'nor_gl': 'nor', 'Rough': 'rough'}
 

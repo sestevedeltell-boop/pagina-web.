@@ -59,6 +59,8 @@ def apply(p, i):
         c_, t_, f_ = os.environ['CAM'].split(':')
         ob['cam'].location = [float(v) for v in c_.split(',')]; ob['target'].location = [float(v) for v in t_.split(',')]; ob['cam'].data.lens = float(f_)
     bpy.data.materials['pipe'].node_tree.nodes['Principled BSDF'].inputs['Emission Strength'].default_value = 6 * s['pipe']
+    hide = s['pipe'] < .01   # los tubos del suelo radiante solo se ven en su capítulo
+    if ob['radiant'].hide_render != hide: ob['radiant'].hide_render = hide
     bpy.data.materials['led'].node_tree.nodes['Principled BSDF'].inputs['Emission Strength'].default_value = 12 * s['pool']
     # hierba: menos briznas hijas cuando la cámara está alta (a distancia no se nota)
     # (solo si cambia: tocarlo en cada fotograma obliga a regenerar toda la hierba)
