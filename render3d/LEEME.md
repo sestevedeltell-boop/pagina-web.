@@ -35,7 +35,7 @@ Estos scripts regeneran la escena y los fotogramas. Todo se ejecuta desde esta c
 - `scene.py` — casa, materiales, piscina, jacuzzi, carretera, cubierta, interiores, luces, cámara y render.
 - `detalles.py` — cocina exterior (barbacoa, fregadero, puertas y cajones), toallas, mesita con libro y vaso,
   bandeja con jarra y vasos, frutero, macetas con plantas y la estancia de la ventana vertical del volumen blanco.
-- `carretera.py` — coches aparcados, señales, placa de la calle, imbornales, tapas y farolas una a una.
+- `carretera.py` — señales, placa de la calle, imbornales, tapas y farolas una a una.
 - `vegetacion.py` — olivos, encinas, pinos piñoneros, cipreses (generados rama a rama), setos, lavanda,
   bosque alrededor (disco de Poisson) y sombrilla de brezo.
 - `olas.py` — oleaje de la piscina y del jacuzzi; `render.py` lo aplica en cada fotograma (el agua se mueve al hacer scroll).
@@ -52,6 +52,6 @@ con estancia detrás, lajas de piedra natural (Poly Haven), cocina exterior comp
 
 Y también: correderas de dos carriles con tiradores, desgaste y marcas de agua, seto irregular, banda de grava con
 pletina junto al césped, cielo soleado (kloofendal_48d), bosque con claros y caminos, montes con relieve, sumideros,
-gárgolas, bajantes y canalón, y carretera con coches aparcados, señales, imbornales y farolas variadas (`carretera.py`).
+gárgolas, bajantes y canalón, y carretera con señales, imbornales y farolas variadas (`carretera.py`).
 
-Ideas pendientes: pocas y menores (por ejemplo, coches con más detalle si se ven de cerca).
+Ideas pendientes: pocas y menores. (Se probaron coches hechos a mano y se quitaron: se veían falsos.)
