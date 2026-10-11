@@ -175,14 +175,15 @@ def weather(nt, b, grime=1., wet=0., wet_mask=None):
     tf_ = node(nt, 'ShaderNodeMath'); tf_.operation = 'MULTIPLY'; tf_.inputs[1].default_value = .3 * grime; L(nt, big.outputs['Fac'], tf_.inputs[0])
     col_ = mix(nt, tf_.outputs[0], col_, mix(nt, 1., col_, lin(0xb9b0a2), 'MULTIPLY'))   # tinte terroso en las zonas sucias
     if wet:
+        # salpicaduras sueltas de 10-30 cm (no grandes manchas): ruido fino deformado, umbral alto
         wn_ = noise(nt, v_, 1.6, 4, .62); wd_ = node(nt, 'ShaderNodeVectorMath'); wd_.operation = 'MULTIPLY_ADD'
-        L(nt, wn_.outputs['Color'], wd_.inputs[0]); wd_.inputs[1].default_value = (.6, .6, .6); L(nt, v_, wd_.inputs[2])
-        wn2 = noise(nt, wd_.outputs[0], 3.2, 3, .55); wmk = node(nt, 'ShaderNodeMapRange'); L(nt, wn2.outputs['Fac'], wmk.inputs['Value'])
-        wmk.inputs['From Min'].default_value = .6 - .08 * wet; wmk.inputs['From Max'].default_value = .63 - .08 * wet
+        L(nt, wn_.outputs['Color'], wd_.inputs[0]); wd_.inputs[1].default_value = (.25, .25, .25); L(nt, v_, wd_.inputs[2])
+        wn2 = noise(nt, wd_.outputs[0], 7.5, 3, .5); wmk = node(nt, 'ShaderNodeMapRange'); L(nt, wn2.outputs['Fac'], wmk.inputs['Value'])
+        wmk.inputs['From Min'].default_value = .69 - .04 * wet; wmk.inputs['From Max'].default_value = .71 - .04 * wet
         wf = wmk.outputs[0]
         if wet_mask is not None:
             mm_ = node(nt, 'ShaderNodeMath'); mm_.operation = 'MULTIPLY'; L(nt, wf, mm_.inputs[0]); L(nt, wet_mask, mm_.inputs[1]); wf = mm_.outputs[0]
-        col_ = mix(nt, wf, col_, mix(nt, 1., col_, lin(0x9b9890), 'MULTIPLY'))
+        col_ = mix(nt, wf, col_, mix(nt, 1., col_, lin(0xd3d0ca), 'MULTIPLY'))   # piedra mojada: algo más oscura
         rg_ = node(nt, 'ShaderNodeMapRange'); L(nt, wf, rg_.inputs['Value']); rg_.inputs['To Min'].default_value = b.inputs['Roughness'].default_value; rg_.inputs['To Max'].default_value = .1
         L(nt, rg_.outputs[0], b.inputs['Roughness'])
     L(nt, col_, b.inputs['Base Color'])
@@ -340,7 +341,8 @@ c = mix(nt, gsp.outputs['Green'], c, meadow)
 if HAVE_PH:
     pm_ = node(nt, 'ShaderNodeMapping'); pm_.inputs['Scale'].default_value = (1 / 2.5,) * 3; L(nt, v, pm_.inputs['Vector'])
     pt_ = node(nt, 'ShaderNodeTexImage'); pt_.image = bpy.data.images.load(PH + 'gravel_road_diff.jpg', check_existing=True); L(nt, pm_.outputs[0], pt_.inputs['Vector'])
-    dirt = mix(nt, 1., pt_.outputs['Color'], lin(0xd8c8a8), 'MULTIPLY')
+    dhs = node(nt, 'ShaderNodeHueSaturation'); dhs.inputs['Saturation'].default_value = .55; L(nt, pt_.outputs['Color'], dhs.inputs['Color'])
+    dirt = mix(nt, 1., dhs.outputs[0], lin(0xd2cbbd), 'MULTIPLY')   # tierra compactada, gris parda
 else: dirt = lin(0x8f7f62)
 c = mix(nt, gsp.outputs['Red'], c, dirt)
 haze(nt, c, b, 2600.); b.inputs['Roughness'].default_value = 1
@@ -1158,6 +1160,7 @@ for xl in [14 + 34 * k for k in range(-6, 6)]:
     pole.cyl(xl, RY1 + .45, .13, 6.2, .075, 12, r2=.05); pole.box(xl - .03, xl + .03, RY1 - .7, RY1 + .45, 6.12, 6.18)
     head.box(xl - .2, xl + .2, RY1 - 1.15, RY1 - .55, 6.06, 6.16); glass_.box(xl - .17, xl + .17, RY1 - 1.12, RY1 - .58, 6.05, 6.06)
 pole.obj('lampposts', 'lampmetal', .006, smooth=True); head.obj('lampheads', 'lampmetal', .01); glass_.obj('lampglass', 'lampglass', 0)
+exec(open(os.path.join(HERE, 'carretera.py')).read())   # coches, señales, imbornales y farolas variadas
 # ------------------------------------------------------------------ luces, cielo, cámara
 SUN_EL, SUN_AZ = 33, 145   # sun_rotation: 0=+Y, 90=+X -> sol delante-derecha
 if HAVE_PH:
