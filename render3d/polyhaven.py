@@ -25,8 +25,10 @@ TEXTURES = {   # nombre -> resolución
     'gravel_floor_02': '2k',        # grava de la cubierta
     'rough_plaster_03': '2k',       # relieve del revoco de la fachada
     'rough_wood': '2k',             # mástil de la sombrilla (madera agrietada)
+    'stacked_stone_wall': '2k',     # lajas de piedra del volumen de piedra y de la cocina exterior
 }
 MAPS = {'Diffuse': 'diff', 'nor_gl': 'nor', 'Rough': 'rough'}
+EXTRA = {'stacked_stone_wall': {'AO': 'ao', 'Displacement': 'disp'}}   # oclusión y relieve para la piedra
 
 
 def get(url):
@@ -63,7 +65,7 @@ def main():
     save(f['hdri'][res]['hdr']['url'], os.path.join(OUT, 'sky.hdr'))
     for name, res in TEXTURES.items():
         f = json.loads(get('https://api.polyhaven.com/files/' + name))
-        for key, short in MAPS.items():
+        for key, short in dict(MAPS, **EXTRA.get(name, {})).items():
             if key in f:
                 save(f[key][res]['jpg']['url'], os.path.join(OUT, '%s_%s.jpg' % (name, short)))
     print('Poly Haven: listo en', OUT)

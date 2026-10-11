@@ -5,8 +5,10 @@ Estos scripts regeneran la escena y los fotogramas. Todo se ejecuta desde esta c
 
 ## Preparar el entorno
 
-1. `pip install bpy==4.2.0 pillow numpy`
-2. `python3 textures.py` — genera las texturas propias en `tex/`
+`bpy 4.2.0` solo existe para Python 3.11: si `python3` es otra versión, usa `python3.11` en todos los comandos.
+
+1. `python3.11 -m pip install bpy==4.2.0 pillow numpy`
+2. `python3.11 textures.py` — genera las texturas propias en `tex/` (no hace falta si ya están en el repositorio)
 3. `python3 polyhaven.py` — descarga el cielo HDRI y las texturas PBR de Poly Haven (CC0) en `ph/`
    (no se suben al repositorio). Necesita que la red del entorno permita `api.polyhaven.com` y `dl.polyhaven.org`.
    Sin `ph/` la escena funciona igual, con los materiales procedurales anteriores.
@@ -31,6 +33,8 @@ Estos scripts regeneran la escena y los fotogramas. Todo se ejecuta desde esta c
 ## Archivos
 
 - `scene.py` — casa, materiales, piscina, jacuzzi, carretera, cubierta, interiores, luces, cámara y render.
+- `detalles.py` — cocina exterior (barbacoa, fregadero, puertas y cajones), toallas, mesita con libro y vaso,
+  bandeja con jarra y vasos, frutero, macetas con plantas y la estancia de la ventana vertical del volumen blanco.
 - `vegetacion.py` — olivos, encinas, pinos piñoneros, cipreses (generados rama a rama), setos, lavanda,
   bosque alrededor (disco de Poisson) y sombrilla de brezo.
 - `olas.py` — oleaje de la piscina y del jacuzzi; `render.py` lo aplica en cada fotograma (el agua se mueve al hacer scroll).

@@ -62,8 +62,10 @@ def ramp(nt, inp, stops):
         e = el.new(pos); e.color = c
     L(nt, inp, r.inputs[0]); return r.outputs[0]
 
-def pbr(nt, b, name, size, tint=None, tint_fac=1., nstr=1., rough=None, scale=None):
-    """Textura PBR de Poly Haven (color, normal, rugosidad) en coordenadas de objeto, proyección en caja."""
+def pbr(nt, b, name, size, tint=None, tint_fac=1., nstr=1., rough=None, scale=None, sat=None, val=None, ao=0., disp=0., gain=None):
+    """Textura PBR de Poly Haven (color, normal, rugosidad) en coordenadas de objeto, proyección en caja.
+    sat/val: saturación y brillo del color; gain: multiplica el color (aclara texturas oscuras);
+    ao: peso de la oclusión (mapa _ao); disp: relieve del mapa _disp en metros."""
     tc = node(nt, 'ShaderNodeTexCoord'); mp = node(nt, 'ShaderNodeMapping')
     mp.inputs['Scale'].default_value = scale or (1 / size,) * 3; L(nt, tc.outputs['Object'], mp.inputs['Vector'])
     def tex(suffix, noncolor):
@@ -72,14 +74,21 @@ def pbr(nt, b, name, size, tint=None, tint_fac=1., nstr=1., rough=None, scale=No
         if noncolor: n.image.colorspace_settings.name = 'Non-Color'
         L(nt, mp.outputs[0], n.inputs['Vector']); return n
     d = tex('diff', False).outputs[0]
+    if sat is not None or val is not None:
+        hs_ = node(nt, 'ShaderNodeHueSaturation'); hs_.inputs['Saturation'].default_value = 1. if sat is None else sat
+        hs_.inputs['Value'].default_value = 1. if val is None else val; L(nt, d, hs_.inputs['Color']); d = hs_.outputs[0]
+    if gain: d = mix(nt, 1.0, d, (gain, gain, gain, 1.), 'MULTIPLY')
     col = mix(nt, tint_fac, d, lin(tint), 'MULTIPLY') if tint is not None else d
+    if ao: col = mix(nt, ao, col, tex('ao', True).outputs[0], 'MULTIPLY')
     L(nt, col, b.inputs['Base Color'])
     rg = tex('rough', True).outputs[0]
     if rough:
         mr = node(nt, 'ShaderNodeMapRange'); mr.inputs['To Min'].default_value, mr.inputs['To Max'].default_value = rough; L(nt, rg, mr.inputs['Value']); rg = mr.outputs[0]
     L(nt, rg, b.inputs['Roughness'])
     nm = node(nt, 'ShaderNodeNormalMap'); nm.inputs['Strength'].default_value = nstr; L(nt, tex('nor', True).outputs[0], nm.inputs['Color'])
-    L(nt, nm.outputs[0], b.inputs['Normal'])
+    nrm = nm.outputs[0]
+    if disp: nrm = bump(nt, tex('disp', True).outputs[0], 1., disp, nrm)
+    L(nt, nrm, b.inputs['Normal'])
     return d
 
 M = {}
@@ -115,6 +124,11 @@ m, nt, b = newmat('stone'); M['stone'] = m
 v = objcoord(nt, 3.0); t = img(nt, v, 'stone.jpg'); tn = img(nt, v, 'stone.jpg', True)
 L(nt, mix(nt, .15, t.outputs[0], lin(0xb8ab94), 'MULTIPLY'), b.inputs['Base Color'])
 b.inputs['Roughness'].default_value = .92; L(nt, bump(nt, tn.outputs[0], .5, .02), b.inputs['Normal'])
+if HAVE_PH and os.path.exists(PH + 'stacked_stone_wall_diff.jpg'):
+    # lajas de piedra natural apiladas: foto real con su oclusión entre piedras y relieve
+    m, nt, b = newmat('stone'); M['stone'] = m
+    # (la foto es oscura y rojiza: se desatura y se aclara hasta una caliza clara, gris cálido)
+    pbr(nt, b, 'stacked_stone_wall', 1.6, tint=0xf7efe2, nstr=1.3, rough=(.78, .97), sat=.28, gain=3.3, ao=.6, disp=.03)
 # Porcelánico exterior
 m, nt, b = newmat('tile'); M['tile'] = m
 v = objcoord(nt, 2.4); t = img(nt, v, 'tile.jpg'); L(nt, t.outputs[0], b.inputs['Base Color'])
@@ -277,14 +291,27 @@ c = ramp(nt, n1.outputs['Fac'], [(0.4, lin(0x2c3b1e)), (0.6, lin(0x3a4a26))]); c
 L(nt, bump(nt, n2.outputs['Fac'], 1.0, 2.0), b.inputs['Normal'])
 b.inputs['Roughness'].default_value = 1
 # Vidrio (deja pasar la luz para sombras: interiores iluminados)
-def glassmat(name, tint=0xf2f6f5, rough=0.):
+def glassmat(name, tint=0xf2f6f5, rough=0., coat=0.):
+    """Vidrio. coat: IOR de la capa reflectante (control solar / bajo emisivo) en la cara exterior; 0 = vidrio simple."""
     m, nt, b = newmat(name); M[name] = m
     b.inputs['Base Color'].default_value = lin(tint); b.inputs['Transmission Weight'].default_value = 1
-    b.inputs['Roughness'].default_value = rough; b.inputs['IOR'].default_value = 1.45
+    b.inputs['Roughness'].default_value = rough; b.inputs['IOR'].default_value = 1.52 if coat else 1.45
+    surf = b.outputs[0]
+    if coat:
+        # reflejo extra según Fresnel solo al entrar (por la cara de atrás sería reflexión total y oscurecería)
+        fr = node(nt, 'ShaderNodeFresnel'); fr.inputs['IOR'].default_value = coat
+        geo = node(nt, 'ShaderNodeNewGeometry'); fm = node(nt, 'ShaderNodeMath'); fm.operation = 'MULTIPLY'
+        inv = node(nt, 'ShaderNodeMath'); inv.operation = 'SUBTRACT'; inv.inputs[0].default_value = 1; L(nt, geo.outputs['Backfacing'], inv.inputs[1])
+        L(nt, fr.outputs[0], fm.inputs[0]); L(nt, inv.outputs[0], fm.inputs[1])
+        gl = node(nt, 'ShaderNodeBsdfGlossy'); gl.distribution = 'GGX'; gl.inputs['Roughness'].default_value = .015
+        gl.inputs['Color'].default_value = lin(0xe9eef0)
+        mc = node(nt, 'ShaderNodeMixShader'); L(nt, fm.outputs[0], mc.inputs[0]); L(nt, b.outputs[0], mc.inputs[1]); L(nt, gl.outputs[0], mc.inputs[2])
+        surf = mc.outputs[0]
     lp = node(nt, 'ShaderNodeLightPath'); tr = node(nt, 'ShaderNodeBsdfTransparent'); tr.inputs[0].default_value = lin(0xe8efed)
     mx = node(nt, 'ShaderNodeMixShader'); out = nt.nodes['Material Output']
-    L(nt, lp.outputs['Is Shadow Ray'], mx.inputs[0]); L(nt, b.outputs[0], mx.inputs[1]); L(nt, tr.outputs[0], mx.inputs[2]); L(nt, mx.outputs[0], out.inputs['Surface'])
-glassmat('glass')
+    L(nt, lp.outputs['Is Shadow Ray'], mx.inputs[0]); L(nt, surf, mx.inputs[1]); L(nt, tr.outputs[0], mx.inputs[2]); L(nt, mx.outputs[0], out.inputs['Surface'])
+glassmat('glass', 0xdbe5e2, coat=2.3)
+glassmat('tglass')   # vasos y jarra
 # Agua: superficie refractiva de verdad (las olas son geometría) y volumen que absorbe el rojo.
 # Sin trucos de sombra: la luz del sol atraviesa la superficie con "shadow caustics" (MNEE) y dibuja las cáusticas.
 # (Cycles no calcula estas cáusticas del sol si hay un volumen en el camino: la absorción del agua va en el gresite, según la profundidad.)
@@ -521,8 +548,7 @@ for i in range(11):
         x = 3.9 if i % 2 == 0 else -6.3; mb.cbox(x, 6.7 - i * .5 - .25, .33, .14, .64, .03)
 mb.obj('radiant', 'pipe', 0, G_BASE)
 # Cocina exterior, mesa y sofá de porche
-mb = MB(); mb.cbox(-5.2, -2.4, .75, 2.6, .7, .9); mb.obj('bbq', 'stone', .01, G_BASE)
-mb = MB(); mb.cbox(-5.2, -2.4, 1.22, 2.7, .78, .05); mb.obj('bbqtop', 'black', .005, G_BASE)
+# (la cocina exterior con barbacoa, fregadero y puertas se crea en detalles.py)
 mb = MB(); mb.cbox(0, -1.2, 1.06, 2.2, 1.0, .05); mb.obj('otable', 'lacquer', .01, G_BASE)
 mb = MB()
 for x in (-1, 1):
@@ -559,7 +585,15 @@ for (x, rz) in ((2.0, .12), (4.0, -.18)):
 
 # Planta baja: muros, piedra, vidrio (WALLS)
 mb = MB(); mb.box(-9.6, -6.4, 1.0, 7.2, .3, 3.6); mb.obj('stonevol', 'stone', .01, G_WALLS)
-mb = MB(); mb.box(-6.4, 6.0, 6.9, 7.2, .3, 3.6); mb.box(4.0, 6.4, 1.0, 7.2, .3, 3.6); mb.obj('gwalls', 'render', .012, G_WALLS)
+mb = MB(); mb.box(-6.4, 6.0, 6.9, 7.2, .3, 3.6); mb.obj('gwalls', 'render', .012, G_WALLS)
+# Volumen blanco de la derecha: ventana vertical de verdad (hueco en el muro de 24 cm, marco, vidrio y vierteaguas)
+# con una pequeña estancia detrás (se amuebla en detalles.py). Hueco y estancia se vacían con booleanos.
+SX0, SX1, SZ0, SZ1, SGY = 4.9, 5.5, .62, 3.05, 1.09
+mb = MB(); mb.box(4.0, 6.4, 1.0, 7.2, .3, 3.6); gw2 = mb.obj('gwalls2', 'render', 0, G_WALLS)
+for cn_, bx_ in (('cut_slot', (SX0, SX1, .9, 1.3, SZ0, SZ1)), ('cut_room', (4.24, 6.16, 1.24, 3.6, .2, 3.36))):
+    mb = MB(); mb.box(*bx_); c_ = mb.obj(cn_, 'render', 0, G_WALLS); c_.hide_render = True; c_.display_type = 'WIRE'
+    md = gw2.modifiers.new(cn_, 'BOOLEAN'); md.operation = 'DIFFERENCE'; md.solver = 'EXACT'; md.object = c_
+md = gw2.modifiers.new('bev', 'BEVEL'); md.width = .012; md.segments = 2; md.limit_method = 'ANGLE'; md.use_clamp_overlap = True
 def glazing(name, x0, x1, y, z0, z1, panes, parent):
     mb = MB(); mb.box(x0, x1, y - .015, y + .015, z0 + .06, z1 - .06); mb.obj(name + '_g', 'glass', 0, parent)
     mb = MB(); mb.box(x0, x1, y - .07, y + .07, z0, z0 + .07); mb.box(x0, x1, y - .07, y + .07, z1 - .07, z1)
@@ -567,7 +601,13 @@ def glazing(name, x0, x1, y, z0, z1, panes, parent):
         xx = x0 + (x1 - x0) * i / panes; mb.box(xx - .035, xx + .035, y - .07, y + .07, z0, z1)
     mb.obj(name + '_f', 'alu', .004, parent)
 glazing('gglass', -6.4, 4.0, 1.2, .3, 3.6, 4, G_WALLS)
-mb = MB(); mb.box(4.95, 5.45, .95, 1.0, .6, 3.0); mb.obj('slotwin', 'alu', 0, G_WALLS)
+mb = MB()   # marco de aluminio negro de 5 cm con travesaño (fijo abajo, practicable arriba)
+mb.box(SX0, SX1, SGY - .03, SGY + .03, SZ0, SZ0 + .05); mb.box(SX0, SX1, SGY - .03, SGY + .03, SZ1 - .05, SZ1)
+mb.box(SX0, SX0 + .05, SGY - .03, SGY + .03, SZ0, SZ1); mb.box(SX1 - .05, SX1, SGY - .03, SGY + .03, SZ0, SZ1)
+mb.box(SX0, SX1, SGY - .03, SGY + .03, 1.06, 1.11); mb.box(SX0 + .05, SX1 - .05, SGY - .04, SGY - .03, 1.11, 1.15)
+mb.obj('slot_f', 'alu', .003, G_WALLS)
+mb = MB(); mb.box(SX0 + .03, SX1 - .03, SGY - .012, SGY + .012, SZ0 + .03, SZ1 - .03); mb.obj('slot_g', 'glass', 0, G_WALLS)
+mb = MB(); mb.box(SX0 - .03, SX1 + .03, .965, SGY - .03, SZ0 - .03, SZ0 + .002); mb.obj('slot_sill', 'alu', .003, G_WALLS)
 mb = MB(); mb.box(-9.38, -9.22, -1.93, -1.77, .3, 3.6); mb.box(5.12, 5.28, -1.93, -1.77, .3, 3.6); mb.obj('columns', 'alu', .005, G_WALLS)
 # Apliques exteriores
 mb = MB(); mb.cbox(-6.0, .95, 2.2, .12, .1, .3); mb.cbox(3.6, .95, 2.2, .12, .1, .3); mb.obj('sconce', 'black', .005, G_WALLS)
@@ -930,6 +970,7 @@ for i, x in enumerate((1.0, 2.3, 3.6)):
 # ------------------------------------------------------------------ vegetación
 NEIGH = []   # sin casas vecinas: la villa está rodeada de bosque
 if not QUICK: exec(open(os.path.join(HERE, 'vegetacion.py')).read())
+exec(open(os.path.join(HERE, 'detalles.py')).read())   # cocina exterior, objetos de uso y estancia de la ventana vertical
 # Carretera: asfalto envejecido de dos carriles (6,2 m), líneas pintadas algo gastadas, rodadas, parches y manchas;
 # bordillo y acera de adoquín junto a la parcela, arcén de tierra y grava al otro lado, y farolas
 RY0, RY1 = -21.6, -15.4; RYC = (RY0 + RY1) / 2
@@ -1106,7 +1147,7 @@ r = sc.render; cy = sc.cycles
 r.engine = 'CYCLES'; cy.device = 'CPU'
 cy.use_adaptive_sampling = True; cy.adaptive_threshold = .03; cy.samples = 160; cy.adaptive_min_samples = 8
 cy.use_denoising = True; cy.denoiser = 'OPENIMAGEDENOISE'; cy.denoising_input_passes = 'RGB_ALBEDO_NORMAL'; cy.denoising_prefilter = 'ACCURATE'
-cy.max_bounces = 8; cy.diffuse_bounces = 2; cy.glossy_bounces = 2; cy.transmission_bounces = 6; cy.volume_bounces = 1; cy.transparent_max_bounces = 8
+cy.max_bounces = 12; cy.diffuse_bounces = 2; cy.glossy_bounces = 2; cy.transmission_bounces = 12; cy.volume_bounces = 1; cy.transparent_max_bounces = 12   # vasos con agua: 6-8 superficies
 cy.caustics_reflective = False; cy.caustics_refractive = True; cy.sample_clamp_indirect = 8; cy.blur_glossy = 1.0
 cy.use_light_tree = True
 r.use_persistent_data = True
