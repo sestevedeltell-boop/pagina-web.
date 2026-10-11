@@ -355,11 +355,11 @@ if not VEG_ONLY:
     # pinos piñoneros grandes en las esquinas del fondo
     place('pineA', -13.4, 10.2, 1.0); place('pineB', 15.6, 9.8, 1.05)
     # bolas de pitosporo y lavanda
-    for (kind, x, y, s) in (('ballA', 9.3, .6, 1.0), ('ballB', 8.2, .9, 1.0), ('ballA', 7.6, -1.6, .8), ('ballA', -11.2, -4.4, 1.1), ('ballB', -10.4, -5.6, 1.0),
+    for (kind, x, y, s) in (('ballA', 9.9, .6, 1.0), ('ballB', 8.1, 1.7, 1.0), ('ballA', -11.2, -4.4, 1.1), ('ballB', -10.4, -5.6, 1.0),
                             ('ballA', 12.0, -10.6, 1.0), ('ballB', 12.9, -11.3, .9), ('ballA', -12.6, -9.6, 1.0), ('ballB', -11.8, -10.4, .9),
                             ('ballA', -10.2, 1.8, .9), ('ballA', 11.4, 6.0, 1.0), ('ballB', -12.2, 5.0, 1.0)):
         place(kind, x, y, s)
-    for (bx, by, w, d) in ((8.4, .5, 2.2, .9), (-11.4, -5, 1.2, 2), (12.6, -6.8, 1.4, 2.4), (-10.6, 2.8, 1.2, 1.4)):
+    for (bx, by, w, d) in ((10.9, .5, 1.0, .9), (-11.4, -5, 1.2, 2), (12.6, -6.8, 1.4, 2.4), (-11.1, 2.8, 1.0, 1.4)):   # siempre sobre césped
         for i in range(int(w * d * 2.2)):
             place('lavA', bx + vr(-w, w) * .9, by + vr(-d, d) * .9, vr(.8, 1.2))
     for i in range(14):
