@@ -228,7 +228,7 @@ tc = node(nt, 'ShaderNodeTexCoord'); v = tc.outputs['Object']
 wv = noise(nt, v, .004, 2); dv = node(nt, 'ShaderNodeVectorMath'); dv.operation = 'MULTIPLY_ADD'; dv.inputs[1].default_value = (35, 35, 0)
 L(nt, wv.outputs['Color'], dv.inputs[0]); L(nt, v, dv.inputs[2])
 vo = node(nt, 'ShaderNodeTexVoronoi'); vo.inputs['Scale'].default_value = .018; vo.inputs['Randomness'].default_value = 1; L(nt, dv.outputs[0], vo.inputs['Vector'])
-parc = ramp(nt, vo.outputs['Color'], [(0, lin(0x6e6532)), (.22, lin(0x7e6f36)), (.4, lin(0x4a5a26)), (.58, lin(0x3a4920)), (.75, lin(0x6a4d30)), (.9, lin(0x86793f))])
+parc = ramp(nt, vo.outputs['Color'], [(0, lin(0x2f3a1d)), (.22, lin(0x3a4722)), (.4, lin(0x2a3419)), (.58, lin(0x434d2c)), (.75, lin(0x3b3224)), (.9, lin(0x48502e))])
 parc.node.color_ramp.interpolation = 'CONSTANT'
 n1 = noise(nt, v, .06, 6); n2 = noise(nt, v, .9, 4); n3 = noise(nt, v, 30, 2)
 nf = node(nt, 'ShaderNodeMath'); nf.operation = 'MULTIPLY'; nf.inputs[1].default_value = .45; L(nt, n1.outputs['Fac'], nf.inputs[0])
@@ -240,8 +240,9 @@ if HAVE_PH:
 haze(nt, c, b, 2600.); b.inputs['Roughness'].default_value = 1
 L(nt, bump(nt, n3.outputs['Fac'], .5, .05), b.inputs['Normal'])
 m, nt, b = newmat('hills'); M['hills'] = m
-tc = node(nt, 'ShaderNodeTexCoord'); n1 = noise(nt, tc.outputs['Object'], .01, 5)
-c = ramp(nt, n1.outputs['Fac'], [(0.4, lin(0x6f6a4a)), (0.6, lin(0x5d6440))]); haze(nt, c, b, 700.)
+tc = node(nt, 'ShaderNodeTexCoord'); n1 = noise(nt, tc.outputs['Object'], .01, 5); n2 = noise(nt, tc.outputs['Object'], .12, 6, .7)
+c = ramp(nt, n1.outputs['Fac'], [(0.4, lin(0x2c3b1e)), (0.6, lin(0x3a4a26))]); c = mix(nt, n2.outputs['Fac'], lin(0x1c2814), c); haze(nt, c, b, 700.)
+L(nt, bump(nt, n2.outputs['Fac'], 1.0, 2.0), b.inputs['Normal'])
 b.inputs['Roughness'].default_value = 1
 # Vidrio (deja pasar la luz para sombras: interiores iluminados)
 def glassmat(name, tint=0xf2f6f5, rough=0.):
@@ -619,7 +620,7 @@ for i in range(4): mb.bm.faces.new((apex, ring[i], ring[(i + 1) % 4]))
 o = mb.obj('canopy', 'canvas', 0); o.modifiers.new('sol', 'SOLIDIFY').thickness = .01
 
 # ------------------------------------------------------------------ vegetación
-NEIGH = [(-48, 40, 12, 9), (40, 55, 14, 10), (-72, -8, 10, 8), (66, 8, 12, 9), (12, 78, 16, 10), (-30, 85, 12, 8), (90, 60, 12, 9), (-60, -60, 12, 9), (55, -55, 14, 9), (-95, 30, 12, 9)]
+NEIGH = []   # sin casas vecinas: la villa está rodeada de bosque
 if not QUICK: exec(open(os.path.join(HERE, 'vegetacion.py')).read())
 # Carretera con aceras
 simple('asphalt', 0x3a3b3c, .85); simple('curb', 0xc9c4ba, .8)
@@ -629,22 +630,6 @@ mb = MB()
 x = -300
 while x < 300: mb.box(x, x + 3, -17.85, -17.75, 0, .003); x += 6
 simple('paint', 0xe8e6df, .6); mb.obj('roadline', 'paint')
-# Casas vecinas con jardín y piscina
-nb = MB(); nbw = MB(); nbl = MB(); nbp = MB(); nbwall = MB()
-for (x, y, w, d) in NEIGH:
-    h = rr(6.0, 7.0)
-    nb.box(x - w / 2, x + w / 2, y - d / 2, y + d / 2, 0, h * .5); nb.box(x - w / 2 + 1, x + w / 2 - rr(1, 3), y - d / 2 + rr(0, 1), y + d / 2, h * .5, h)
-    face = -1 if y > -14 else 1
-    yf = y - d / 2 if face < 0 else y + d / 2
-    nbw.box(x - w * .35, x + w * .3, yf - .06, yf + .06, .4, h * .45); nbw.box(x - w * .3, x + w * .2, yf - .06 + face * -.5, yf + .06 + face * -.5, h * .55, h * .92)
-    gy0, gy1 = (y - d / 2 - 14, y - d / 2) if face < 0 else (y + d / 2, y + d / 2 + 14)
-    nbl.poly([(x - w / 2 - 6, gy0, .01), (x + w / 2 + 6, gy0, .01), (x + w / 2 + 6, gy1, .01), (x - w / 2 - 6, gy1, .01)])
-    py = (gy0 + gy1) / 2; nbp.box(x - 4, x + 4, py - 1.6, py + 1.6, .0, .03)
-    for (a0, a1, b0, b1) in ((x - w / 2 - 6, x + w / 2 + 6, gy0 - .1, gy0 + .1) if face < 0 else (x - w / 2 - 6, x + w / 2 + 6, gy1 - .1, gy1 + .1),):
-        nbwall.box(a0, a1, b0, b1, 0, 1.6)
-nb.obj('neighbors', 'render', .02); nbw.obj('neighborwin', 'alu', 0); nbl.obj('neighborlawn', 'lawn'); nbwall.obj('neighborwalls', 'render', .01)
-simple('npool', 0x2fb6c9, .05); nbp.obj('neighborpools', 'npool')
-
 # ------------------------------------------------------------------ luces, cielo, cámara
 SUN_EL, SUN_AZ = 33, 145   # sun_rotation: 0=+Y, 90=+X -> sol delante-derecha
 if HAVE_PH:

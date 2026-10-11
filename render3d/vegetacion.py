@@ -57,6 +57,8 @@ def bark_mat(name, cols, scale, stretch, fiss=.6, bump_s=.9):
 
 foliage_mat('olive_leaf', [(0, 0x3c4a31), (.45, 0x48563a), (.8, 0x546043), (1, 0x5f694a)],
             [(0, 0x727d66), (.5, 0x808a72), (1, 0x8e977f)], transl=.22, rough=.42, spec=.5)
+foliage_mat('oak_leaf', [(0, 0x26401b), (.45, 0x305022), (.8, 0x3a5c28), (1, 0x476830)],
+            [(0, 0x4a5e36), (.5, 0x56693f), (1, 0x627448)], transl=.25, rough=.45, spec=.45, hue_var=.05, val_var=.18)
 foliage_mat('pine_needle', [(0, 0x334a24), (.4, 0x3f5a2b), (.75, 0x4b6631), (1, 0x5d7038)], transl=.3, rough=.55, spec=.35, hue_var=.06, val_var=.2)
 foliage_mat('cypress_leaf', [(0, 0x1f3319), (.45, 0x29401f), (.8, 0x324a24), (1, 0x3f5529)], transl=.15, rough=.6, spec=.3, hue_var=.025)
 foliage_mat('hedge_leaf', [(0, 0x2f4d1f), (.4, 0x3b5d26), (.75, 0x4a6c2e), (1, 0x5a7a36)], transl=.25, rough=.45, spec=.45)
@@ -178,6 +180,27 @@ def olive_tree(bark, lv, hgt):
             leaf6(lv, pts[-1] + vdir() * .04, ld, (Vector((0, 0, 1)) + vdir() * .6).normalized(), vr(.05, .07), .012, VR.random(), .2)
     grow(bark, sink, Vector((0, 0, -.05)), Vector((vr(-.15, .15), vr(-.15, .15), 1)).normalized(), hgt * .27, vr(.22, .28), 0, OLIVE)
 
+# --- encina: tronco corto, copa redonda, muy densa y oscura (el árbol del bosque mediterráneo)
+OAK = dict(seg=[.15, .16, .12, .08, .05], wob=[.08, .14, .2, .25, .3], trop=[.08, .08, .04, 0., -.04], taper=[.35, .5, .6, .65, .6],
+           sides=[12, 9, 6, 5, 4], bumps=[.12, .08, .03, 0, 0], kids=[4, 7, 7, 6], kstart=[.75, .25, .2, .15],
+           angle=[(30, 50), (35, 70), (30, 65), (30, 65)], kup=[.08, .1, .05, 0.], klen=[1.25, .7, .6, .55], krad=[.6, .5, .5, .55],
+           skip_bark=5, shape=True)
+def oak_tree(bark, lv, hgt):
+    def sink(pts, rads):
+        n = len(pts)
+        for i in range(1, n):
+            p = pts[i]; d = (pts[i] - pts[i - 1]).normalized()
+            for k in range(3):
+                q = pts[i - 1].lerp(p, (k + 1) / 3)
+                side = Matrix.Rotation(vr(0, 6.28), 3, d) @ d.orthogonal().normalized()
+                for s in (-1, 1):
+                    ld = (d * .5 + side * s * .8 + Vector((0, 0, .2))).normalized()
+                    leaf6(lv, q, ld, (Vector((0, 0, 1)) + vdir() * .5).normalized(), vr(.045, .065), vr(.024, .032), VR.random(), vr(.05, .2))
+        tipd = (pts[-1] - pts[-2]).normalized()
+        for s in range(14):
+            leaf6(lv, pts[-1] + vdir() * .06, (tipd + vdir() * .8).normalized(), (Vector((0, 0, 1)) + vdir() * .5).normalized(), vr(.045, .065), .028, VR.random(), .15)
+    grow(bark, sink, Vector((0, 0, -.05)), Vector((vr(-.08, .08), vr(-.08, .08), 1)).normalized(), hgt * .2, vr(.25, .34), 0, OAK)
+
 # --- pino piñonero: fuste alto, se abre arriba en brazos que forman una copa plana en sombrilla
 PINE = dict(seg=[.5, .35, .25, .15, .09], wob=[.03, .08, .12, .18, .2], trop=[.04, .09, .08, .1, .12], taper=[.45, .6, .65, .65, .6],
             sides=[14, 10, 7, 5, 4], bumps=[.06, .04, .02, 0, 0], kids=[8, 7, 6, 5], kstart=[.84, .3, .3, .3],
@@ -276,6 +299,8 @@ def make_proto(name, build):
 
 def olive_parts(h):
     bark, lv = Geo(), Geo(); olive_tree(bark, lv, h); return [(bark, 'olive_bark', True), (lv, 'olive_leaf', False)]
+def oak_parts(h):
+    bark, lv = Geo(), Geo(); oak_tree(bark, lv, h); return [(bark, 'olive_bark', True), (lv, 'oak_leaf', False)]
 def pine_parts(h):
     bark, lv, inner = Geo(), Geo(), Geo(); pine_tree(bark, lv, h, inner)
     return [(bark, 'pine_bark', True), (lv, 'pine_needle', False), (inner, 'pine_inner', True)]
@@ -291,7 +316,8 @@ def lav_parts(r):
 
 VEG_ONLY = os.environ.get('UNIKAL_VEG_ONLY')   # pruebas: generar solo algunos prototipos
 for nm, fn in (('oliveA', lambda: olive_parts(5.2)), ('oliveB', lambda: olive_parts(4.4)), ('oliveC', lambda: olive_parts(5.8)),
-               ('pineA', lambda: pine_parts(13.5)), ('pineB', lambda: pine_parts(11.5)),
+               ('oakA', lambda: oak_parts(9.5)), ('oakB', lambda: oak_parts(8.0)), ('oakC', lambda: oak_parts(10.5)),
+               ('pineA', lambda: pine_parts(13.5)), ('pineB', lambda: pine_parts(11.5)), ('pineC', lambda: pine_parts(15.0)),
                ('cypressA', lambda: cypress_parts(10.5)), ('cypressB', lambda: cypress_parts(8.5)),
                ('hedgeT', lambda: hedge_parts(1.95, .75)), ('hedgeL', lambda: hedge_parts(1.0, .6)),
                ('ballA', lambda: ball_parts(.55)), ('ballB', lambda: ball_parts(.4)), ('lavA', lambda: lav_parts(.38))):
@@ -342,44 +368,51 @@ if not VEG_ONLY:
     e = place('oliveB', .75, 2.5, .3, rot=1.2)
     if e: e.location.z = 4.3; e.parent = G_UPPER
 
-    # ---------------- entorno: pinares en manchas, olivares en hileras y cipreses junto a las casas
-    def blocked(x, y):
-        if -21 < x < 23 and -22 < y < 18: return True
-        if -21.5 < y < -14: return True   # carretera
-        if -75 < x < 75 and -110 < y < -21: return VR.random() > .1   # corredor de la cámara casi despejado
-        for (hx, hy, w, d) in NEIGH:
-            if abs(x - hx) < w / 2 + 5 and abs(y - hy) < d / 2 + 6: return True
-        return False
-    groves = [(vr(-420, 420), vr(-200, 420), vr(20, 55)) for _ in range(30)]
+    # ---------------- bosque frondoso alrededor de la parcela (encinas, pinos piñoneros, cipreses y matorral)
+    def zone(x, y):
+        if -18.5 < x < 20.5 and -13.8 < y < 16.5: return None        # parcela
+        if -22.6 < y < -13.3: return None                             # carretera y aceras
+        if -62 < x < 46 and -85 < y < -22.6: return 'claro'           # delante de la carretera: solo matorral (la cámara pasa por aquí)
+        return 'bosque'
+    groves = [(vr(-350, 350), vr(-350, 350), vr(25, 60)) for _ in range(40)]
     def pine_density(x, y):
         return max(math.exp(-((x - gx) ** 2 + (y - gy) ** 2) / (2 * gr * gr)) for gx, gy, gr in groves)
-    cnt = 0; tries = 0
-    while cnt < 380 and tries < 60000:
+    # muestreo de disco de Poisson sobre una rejilla: árboles juntos, con las copas tocándose
+    cell = 4.0; grid = {}; pts = []
+    def free(x, y, r):
+        gx, gy = int(x // cell), int(y // cell)
+        for i in range(gx - 3, gx + 4):
+            for j in range(gy - 3, gy + 4):
+                for (px, py, pr) in grid.get((i, j), ()):
+                    if (px - x) ** 2 + (py - y) ** 2 < (r + pr) ** 2 * .25: return False
+        return True
+    tries = 0
+    while tries < 260000 and len(pts) < 11000:
         tries += 1
-        d = 30 + (VR.random() ** .9) * 430; a = vr(0, 2 * math.pi); x, y = math.cos(a) * d * 1.1, math.sin(a) * d
-        if blocked(x, y) or VR.random() > .02 + .98 * pine_density(x, y) ** 1.5: continue
-        place('pineA' if VR.random() < .5 else 'pineB', x, y, vr(.7, 1.25)); cnt += 1
-    # olivares (hileras de 7 m) en parcelas sueltas
-    for _ in range(9):
-        cx, cy = vr(-380, 380), vr(-150, 380); ang = vr(0, 3.14); nx_, ny_ = VR.randint(5, 11), VR.randint(4, 9)
-        ca, sa = math.cos(ang), math.sin(ang)
-        for i in range(nx_):
-            for j in range(ny_):
-                lx, ly = (i - nx_ / 2) * 7 + vr(-.5, .5), (j - ny_ / 2) * 7 + vr(-.5, .5)
-                x, y = cx + lx * ca - ly * sa, cy + lx * sa + ly * ca
-                if not blocked(x, y): place(VR.choice(['oliveA', 'oliveB', 'oliveC']), x, y, vr(.75, 1.0))
-    # matorral (lentisco, coscoja) en manchas sobre el campo
+        d = math.sqrt(VR.random()) * 300; a = vr(0, 2 * math.pi); x, y = math.cos(a) * d * 1.1, math.sin(a) * d
+        z_ = zone(x, y)
+        if z_ != 'bosque': continue
+        r = vr(3.6, 4.8) * (1 + max(0, d - 140) / 220)          # copas que se tocan; más espaciado a lo lejos
+        if not free(x, y, r): continue
+        grid.setdefault((int(x // cell), int(y // cell)), []).append((x, y, r)); pts.append((x, y))
+        u = VR.random(); pd = pine_density(x, y)
+        if u < .08 + .3 * pd: kind = VR.choice(['pineA', 'pineB', 'pineC']); s = vr(.8, 1.15)
+        elif u < .95: kind = VR.choice(['oakA', 'oakB', 'oakC']); s = vr(.8, 1.2)
+        elif u < .97: kind = VR.choice(['cypressA', 'cypressB']); s = vr(.9, 1.15)
+        else: kind = VR.choice(['oliveA', 'oliveC']); s = vr(.9, 1.1)
+        place(kind, x, y, s)
+    print('bosque:', len(pts), 'árboles', flush=True)
+    # sotobosque y matorral (más denso en el claro delante de la carretera)
     cnt = 0; tries = 0
-    while cnt < 1400 and tries < 40000:
+    while cnt < 9000 and tries < 120000:
         tries += 1
-        d = 26 + (VR.random() ** 1.2) * 300; a = vr(0, 2 * math.pi); x, y = math.cos(a) * d * 1.1, math.sin(a) * d
-        if blocked(x, y) or VR.random() > .15 + .85 * pine_density(x * .8 + 40, y * .8 - 30): continue
+        d = 21 + math.sqrt(VR.random()) * 240; a = vr(0, 2 * math.pi); x, y = math.cos(a) * d * 1.1, math.sin(a) * d
+        z_ = zone(x, y)
+        if z_ is None or (z_ == 'claro' and VR.random() > .8): continue
         e = place('ballA' if VR.random() < .5 else 'ballB', x, y, 1)
-        if e: s_ = vr(1.1, 2.6); e.scale = (s_ * vr(.8, 1.3), s_ * vr(.8, 1.3), s_ * vr(.55, .9))
+        if e: s_ = vr(1.8, 3.6) if z_ == 'bosque' else vr(.9, 1.8); e.scale = (s_ * vr(.8, 1.4), s_ * vr(.8, 1.4), s_ * vr(.6, 1.1))
         cnt += 1
-    # cipreses y olivos en los jardines vecinos
-    for (hx, hy, w, d) in NEIGH:
-        for k in range(VR.randint(3, 6)):
-            place('cypressA' if VR.random() < .5 else 'cypressB', hx + w / 2 + 3 + k * 2.4, hy + d / 2 + 4, vr(.85, 1.05))
-        place(VR.choice(['oliveA', 'oliveB']), hx - w / 2 - 3, hy - d / 2 - 5, vr(.8, 1.0))
-        place('pineA', hx + vr(-w, w), hy + d / 2 + 9, vr(.85, 1.1))
+    # algunos olivos y encinas jóvenes sueltos en el claro, lejos del recorrido de la cámara
+    for _ in range(40):
+        x, y = vr(-60, 44), vr(-84, -60)
+        if zone(x, y) == 'claro': place(VR.choice(['oliveA', 'oliveB', 'oakB']), x, y, vr(.5, .8))
