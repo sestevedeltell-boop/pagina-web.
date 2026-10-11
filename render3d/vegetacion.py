@@ -364,6 +364,48 @@ if not VEG_ONLY:
             place('lavA', bx + vr(-w, w) * .9, by + vr(-d, d) * .9, vr(.8, 1.2))
     for i in range(14):
         place('lavA', -9.4 + i * .45, -11.95 + vr(-.05, .05), vr(.85, 1.1))
+    # sombrilla de brezo (paja) con mástil de madera, la típica de piscinas y hoteles: varias capas de briznas,
+    # fleco irregular en el borde, varillas de madera debajo y remate en la punta
+    foliage_mat('straw', [(0, 0x5f4c33), (.3, 0x7d6646), (.65, 0x9a835c), (1, 0xb39b72)], transl=.12, rough=.85, spec=.25, hue_var=.03, val_var=.1)
+    m, nt, b = newmat('polewood'); M['polewood'] = m
+    tcp = node(nt, 'ShaderNodeTexCoord'); mpp = node(nt, 'ShaderNodeMapping'); mpp.inputs['Scale'].default_value = (40, 40, 2); L(nt, tcp.outputs['Object'], mpp.inputs['Vector'])
+    npw = noise(nt, mpp.outputs[0], 1.0, 6, .6)
+    L(nt, ramp(nt, npw.outputs['Fac'], [(.3, lin(0x6b4a2e)), (.6, lin(0x8c6640)), (.8, lin(0x9f7a50))]), b.inputs['Base Color']); b.inputs['Roughness'].default_value = .6
+    L(nt, bump(nt, npw.outputs['Fac'], .4, .005), b.inputs['Normal'])
+    UX, UY, R_, ZA, ZE = 6.3, -11.0, 1.6, 3.0, 2.36
+    st, wd, mat_ = Geo(), Geo(), Geo()
+    tube(wd, [Vector((UX, UY, .07)), Vector((UX, UY, ZA - .05))], [.06, .05], 14)
+    for k in range(10):
+        a = k / 10 * 2 * math.pi
+        tube(wd, [Vector((UX, UY, ZA - .2)), Vector((UX + math.cos(a) * R_ * .93, UY + math.sin(a) * R_ * .93, ZE + .03))], [.022, .016], 6)
+    def cz(r): return ZA - (ZA - ZE) * r / R_
+    n_c = 40
+    for j in range(n_c):   # estera de paja bajo las briznas (que no se vea el cielo a través)
+        a0, a1 = j / n_c * 2 * math.pi, (j + 1) / n_c * 2 * math.pi
+        for (r0, r1) in ((.05, .8), (.8, R_ * .985)):
+            mat_.face([Vector((UX + math.cos(a0) * r0, UY + math.sin(a0) * r0, cz(r0) - .015)), Vector((UX + math.cos(a1) * r0, UY + math.sin(a1) * r0, cz(r0) - .015)),
+                       Vector((UX + math.cos(a1) * r1, UY + math.sin(a1) * r1, cz(r1) - .015)), Vector((UX + math.cos(a0) * r1, UY + math.sin(a0) * r1, cz(r1) - .015))], .15)
+    for _ in range(26000):
+        r = R_ * math.sqrt(VR.random()) * .99; a = vr(0, 2 * math.pi)
+        out = Vector((math.cos(a), math.sin(a), 0)); slope = (out * (ZA - ZE) / R_ * -1 + Vector((0, 0, 0))).z
+        down = (out + Vector((0, 0, -(ZA - ZE) / R_))).normalized()
+        p = Vector((UX + out.x * r, UY + out.y * r, cz(r) + vr(0, .09)))
+        d = (down + vdir() * .12).normalized(); Ls = vr(.3, .55) * (.6 + .4 * min(1, r / .5))
+        w = vr(.004, .009); side = d.cross(Vector((0, 0, 1))).normalized() * w
+        tip = p + d * Ls
+        st.face([p - side, p + side, tip + side * .4, tip - side * .4], VR.random())
+    for _ in range(5200):   # fleco del borde, más caído e irregular
+        a = vr(0, 2 * math.pi); out = Vector((math.cos(a), math.sin(a), 0))
+        p = Vector((UX + out.x * R_ * vr(.9, 1.0), UY + out.y * R_ * vr(.9, 1.0), ZE + vr(.0, .08)))
+        d = (out * .35 + Vector((0, 0, -1)) + vdir() * .15).normalized(); Ls = vr(.12, .32)
+        side = d.cross(Vector((0, 0, 1))).normalized() * vr(.004, .008); tip = p + d * Ls
+        st.face([p - side, p + side, tip + side * .4, tip - side * .4], VR.random())
+    for _ in range(900):   # remate de la punta
+        d = (Vector((0, 0, 1)) * .6 + vdir() * .7).normalized(); p = Vector((UX, UY, ZA + .02)) + vdir() * .05
+        side = d.orthogonal().normalized() * .005; tip = p + d * vr(.12, .25)
+        st.face([p - side, p + side, tip + side * .4, tip - side * .4], VR.random())
+    st.obj('umbrella_straw', 'straw'); mat_.obj('umbrella_mat', 'straw'); wd.obj('umbrella_wood', 'polewood', smooth=True)
+
     # olivos en maceta en el salón, junto al ventanal
     for (x_, y_, s_) in ((-5.2, 1.85, .34), (3.6, 1.65, .28)):
         e = place('oliveB', x_, y_, s_, rot=x_)

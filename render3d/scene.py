@@ -95,10 +95,10 @@ m, nt, b = newmat('render'); M['render'] = m
 v = objcoord(nt); n1 = noise(nt, v, 1.2, 3); n2 = noise(nt, v, 60, 2)
 col = mix(nt, n1.outputs['Fac'], lin(0xe4e2dc), lin(0xf2f1ec))
 if HAVE_PH:   # revoco: relieve y rugosidad reales, color blanco con un leve matiz de la textura
-    d = pbr(nt, b, 'painted_plaster_wall', 2.0, nstr=.35, rough=(.78, .95))
+    d = pbr(nt, b, 'rough_plaster_03', 1.1, nstr=1.3, rough=(.8, .97))   # revoco fratasado: relieve que se ve con el sol rasante
     bw = node(nt, 'ShaderNodeRGBToBW'); L(nt, d, bw.inputs[0])
     vr_ = node(nt, 'ShaderNodeMapRange'); vr_.inputs['From Min'].default_value = .45; vr_.inputs['From Max'].default_value = .75
-    vr_.inputs['To Min'].default_value = .95; vr_.inputs['To Max'].default_value = 1.02; L(nt, bw.outputs[0], vr_.inputs['Value'])
+    vr_.inputs['To Min'].default_value = .9; vr_.inputs['To Max'].default_value = 1.03; L(nt, bw.outputs[0], vr_.inputs['Value'])
     col = mix(nt, 1.0, col, vr_.outputs[0], 'MULTIPLY')
     geo_ = node(nt, 'ShaderNodeNewGeometry'); spz = node(nt, 'ShaderNodeSeparateXYZ'); L(nt, geo_.outputs['Position'], spz.inputs[0])
     dz = node(nt, 'ShaderNodeMapRange'); dz.inputs['From Min'].default_value = .05; dz.inputs['From Max'].default_value = .75
@@ -836,7 +836,48 @@ mb.obj('coping', 'tile', .012)
 mb = MB()
 for i in range(6): mb.cbox(-2 + i * 2, -4.42, -.45, .13, .01, .13)
 mb.obj('leds', 'led', 0)
-mb = MB(); mb.box(-9.8, -3.4, -11.6, -4.0, 0, .08); mb.box(-3.4, 9.4, -11.6, -9.2, 0, .08); mb.obj('deck', 'wood', .004)
+# Tarima de tablas reales: 14 cm de ancho, juntas de 6 mm, testas escalonadas, cantos redondeados y veta distinta en cada tabla
+simple('deckgap', 0x1b1612, .9)
+mb = MB(); mb.box(-9.8, -3.4, -11.6, -4.0, 0, .05); mb.box(-3.4, 9.4, -11.6, -9.2, 0, .05); mb.obj('deckbase', 'deckgap', 0)
+m, nt, b = newmat('deckboard'); M['deckboard'] = m
+if HAVE_PH:
+    atb = node(nt, 'ShaderNodeAttribute'); atb.attribute_name = 'boardvar'; atb.attribute_type = 'GEOMETRY'
+    tcb = node(nt, 'ShaderNodeTexCoord'); ofs = node(nt, 'ShaderNodeVectorMath'); ofs.operation = 'MULTIPLY_ADD'; ofs.inputs[1].default_value = (7.3, 0, 0)
+    L(nt, atb.outputs['Fac'], ofs.inputs[0]); L(nt, tcb.outputs['Object'], ofs.inputs[2])
+    mpb = node(nt, 'ShaderNodeMapping'); mpb.inputs['Scale'].default_value = (1 / 2.4, 1 / .62, 1 / .62); L(nt, ofs.outputs[0], mpb.inputs['Vector'])
+    def tb(suf, nc):
+        n_ = node(nt, 'ShaderNodeTexImage'); n_.image = bpy.data.images.load(PH + 'oak_wood_planks_%s.jpg' % suf, check_existing=True); n_.projection = 'BOX'; n_.projection_blend = .2
+        if nc: n_.image.colorspace_settings.name = 'Non-Color'
+        L(nt, mpb.outputs[0], n_.inputs['Vector']); return n_.outputs[0]
+    bc_ = node(nt, 'ShaderNodeBrightContrast'); bc_.inputs['Contrast'].default_value = .35; L(nt, tb('diff', False), bc_.inputs['Color'])
+    tone = ramp(nt, atb.outputs['Fac'], [(0, lin(0xd2c4b4)), (.3, lin(0xe2d4c0)), (.55, lin(0xbfae9a)), (.8, lin(0xe8d8c2)), (1, lin(0xae9c86))])
+    wc_ = mix(nt, 1.0, mix(nt, 1.0, bc_.outputs[0], lin(0xb8977a), 'MULTIPLY'), tone, 'MULTIPLY')
+    hsd = node(nt, 'ShaderNodeHueSaturation'); hsd.inputs['Saturation'].default_value = .8; hsd.inputs['Hue'].default_value = .51; L(nt, wc_, hsd.inputs['Color'])
+    L(nt, hsd.outputs[0], b.inputs['Base Color'])
+    rr2 = node(nt, 'ShaderNodeMapRange'); rr2.inputs['To Min'].default_value = .38; rr2.inputs['To Max'].default_value = .8; L(nt, tb('rough', True), rr2.inputs['Value']); L(nt, rr2.outputs[0], b.inputs['Roughness'])
+    nmb = node(nt, 'ShaderNodeNormalMap'); nmb.inputs['Strength'].default_value = 1.2; L(nt, tb('nor', True), nmb.inputs['Color']); L(nt, nmb.outputs[0], b.inputs['Normal'])
+    b.inputs['Coat Weight'].default_value = .12; b.inputs['Coat Roughness'].default_value = .3
+else:
+    b.inputs['Base Color'].default_value = lin(0x9a6a48); b.inputs['Roughness'].default_value = .6
+RB = random.Random(31); V_, F_, A_ = [], [], []
+def board(x0, x1, y0, y1, z0, z1, a):
+    n = len(V_); V_.extend([(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0), (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)])
+    for q in ((0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)): F_.append(tuple(n + i for i in q)); A_.append(a)
+y = -11.6 + .003
+while y < -4.0:
+    y1 = min(y + .14, -4.003)
+    xa, xb = (-9.8, 9.4) if y1 <= -9.2 else (-9.8, -3.4)
+    x = xa - RB.uniform(0, 2.4)
+    while x < xb:
+        L_ = RB.choice((2.4, 3.0, 3.6)); bx0, bx1 = max(xa, x) + .002, min(xb, x + L_) - .002
+        if bx1 - bx0 > .05: board(bx0, bx1, y, y1, .05, .08, RB.random())
+        x += L_
+    y += .148
+med = bpy.data.meshes.new('deck'); med.from_pydata(V_, [], F_); med.update()
+at_ = med.attributes.new('boardvar', 'FLOAT', 'FACE'); at_.data.foreach_set('value', A_)
+deck_ob = bpy.data.objects.new('deck', med); COL.objects.link(deck_ob); med.materials.append(M['deckboard'])
+bv_ = deck_ob.modifiers.new('bev', 'BEVEL'); bv_.width = .0045; bv_.segments = 2; bv_.limit_method = 'ANGLE'; bv_.harden_normals = True
+for p in med.polygons: p.use_smooth = True
 # Jacuzzi elevado
 JX, JY = -6.4, -7.2
 mb = MB(); n = 160
@@ -884,30 +925,7 @@ for i, x in enumerate((1.0, 2.3, 3.6)):
     mb = MB(); mb.box(x - .33, x + .33, -10.85, -9.42, .26, .34); soft(mb.obj('lcush%d' % i, 'fabriclight', 0), .035, 4)
     mb = MB(); mb.box(-.33, .33, -.36, .36, 0, .08)
     me_o = soft(mb.obj('lback%d' % i, 'fabriclight', 0), .035, 4); me_o.location = (x, -11.12, .5); me_o.rotation_euler = (math.radians(-40), 0, 0)
-mb = MB(); mb.cyl(6.3, -11.0, .08, 2.65, .035, 10); mb.obj('pole', 'alu', 0)
-# sombrilla cuadrada de 3 x 3 m: lona tensada sobre 4 varillas con la tela algo caída entre ellas, faldón y remate
-UX, UY, UZ, UR = 6.3, -11.0, 2.92, 1.5
-def uz(x, y):
-    s_ = max(abs(x), abs(y)) / UR; th = math.atan2(y, x)
-    d_ = abs(((th - math.pi / 4) % (math.pi / 2)) - math.pi / 4) / (math.pi / 4)   # 0 en las varillas (diagonales), 1 entre ellas
-    return UZ - .42 * s_ - .07 * s_ ** 1.3 * d_ ** 1.5
-mb = MB(); n_ = 36
-G_ = [[mb.bm.verts.new((UX + x, UY + y, uz(x, y))) for x in [-UR + 2 * UR * i / n_ for i in range(n_ + 1)]] for y in [-UR + 2 * UR * j / n_ for j in range(n_ + 1)]]
-for j in range(n_):
-    for i in range(n_): mb.bm.faces.new((G_[j][i], G_[j][i + 1], G_[j + 1][i + 1], G_[j + 1][i]))
-edge_ = [G_[0][i] for i in range(n_)] + [G_[j][n_] for j in range(n_)] + [G_[n_][i] for i in range(n_, 0, -1)] + [G_[j][0] for j in range(n_, 0, -1)]
-low_ = [mb.bm.verts.new((v.co.x, v.co.y, v.co.z - .14)) for v in edge_]
-for k in range(len(edge_)): mb.bm.faces.new((edge_[k], edge_[(k + 1) % len(edge_)], low_[(k + 1) % len(low_)], low_[k]))
-o = mb.obj('canopy', 'canvas', 0, smooth=True); o.modifiers.new('sol', 'SOLIDIFY').thickness = .008
-mb = MB()
-for sx, sy in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
-    p0 = Vector((UX, UY, UZ - .06)); p1 = Vector((UX + sx * UR * .98, UY + sy * UR * .98, uz(sx * UR * .98, sy * UR * .98) - .02))
-    n0_ = len(mb.bm.verts); mb.cyl(0, 0, 0, 1, .012, 6); mb.bm.verts.ensure_lookup_table()
-    nv = [mb.bm.verts[k] for k in range(n0_, len(mb.bm.verts))]
-    ax = (p1 - p0); rot = ax.to_track_quat('Z', 'Y').to_matrix()
-    for v in nv: v.co = rot @ Vector((v.co.x, v.co.y, v.co.z * ax.length)) + p0
-mb.cyl(UX, UY, UZ - .2, UZ + .02, .05, 16); mb.cyl(UX, UY, UZ + .02, UZ + .12, .09, 16, r2=.02)
-mb.obj('umbribs', 'alu', 0, smooth=True)
+# (la sombrilla de brezo con mástil de madera se crea en vegetacion.py)
 
 # ------------------------------------------------------------------ vegetación
 NEIGH = []   # sin casas vecinas: la villa está rodeada de bosque
