@@ -241,7 +241,7 @@ haze(nt, c, b, 2600.); b.inputs['Roughness'].default_value = 1
 L(nt, bump(nt, n3.outputs['Fac'], .5, .05), b.inputs['Normal'])
 m, nt, b = newmat('hills'); M['hills'] = m
 tc = node(nt, 'ShaderNodeTexCoord'); n1 = noise(nt, tc.outputs['Object'], .01, 5); n2 = noise(nt, tc.outputs['Object'], .12, 6, .7)
-c = ramp(nt, n1.outputs['Fac'], [(0.4, lin(0x2c3b1e)), (0.6, lin(0x3a4a26))]); c = mix(nt, n2.outputs['Fac'], lin(0x1c2814), c); haze(nt, c, b, 700.)
+c = ramp(nt, n1.outputs['Fac'], [(0.4, lin(0x2c3b1e)), (0.6, lin(0x3a4a26))]); c = mix(nt, n2.outputs['Fac'], lin(0x1c2814), c); haze(nt, c, b, 2200.)   # montes con bosque, algo azulados por la distancia
 L(nt, bump(nt, n2.outputs['Fac'], 1.0, 2.0), b.inputs['Normal'])
 b.inputs['Roughness'].default_value = 1
 # Vidrio (deja pasar la luz para sombras: interiores iluminados)
