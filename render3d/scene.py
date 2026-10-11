@@ -451,14 +451,69 @@ mb = MB(); mb.cbox(-6.0, .95, 2.2, .12, .1, .3); mb.cbox(3.6, .95, 2.2, .12, .1,
 
 # Planta alta (UPPER)
 mb = MB(); mb.box(-10.0, 5.6, -2.1, 7.1, 3.6, 4.02); mb.obj('uslab', 'render', .015, G_UPPER)
-mb = MB(); mb.box(-10.0, -9.68, -2.1, 7.1, 4.02, 7.0); mb.box(-.6, 5.6, -2.1, 7.1, 4.02, 7.0); mb.box(-9.7, -.1, 6.8, 7.1, 4.02, 7.0)
+mb = MB(); mb.box(-10.0, -9.68, -2.1, 7.1, 4.02, 7.0); mb.box(-9.7, -.1, 6.8, 7.1, 4.02, 7.0)
+# Volumen derecho: estudio con ventanal de suelo a techo en la fachada (muros de 24 cm y vidrio retranqueado)
+WX0, WX1, WZ0, WZ1, WT = .25, 5.05, 4.1, 6.78, .24
+mb.box(-.6, -.36, -2.1, 7.1, 4.02, 7.0); mb.box(5.36, 5.6, -2.1, 7.1, 4.02, 7.0); mb.box(-.36, 5.36, 6.86, 7.1, 4.02, 7.0)
+mb.box(-.36, WX0, -2.1, -2.1 + WT, 4.02, 7.0); mb.box(WX1, 5.36, -2.1, -2.1 + WT, 4.02, 7.0)
+mb.box(WX0, WX1, -2.1, -2.1 + WT, 4.02, WZ0); mb.box(WX0, WX1, -2.1, -2.1 + WT, WZ1, 7.0)
 mb.obj('uwalls', 'render', .015, G_UPPER)
 glazing('uglass', -9.68, -.6, 1.6, 4.02, 7.0, 4, G_UPPER)
 mb = MB(); mb.box(-9.68, -.6, -2.0, -1.97, 4.08, 5.05); mb.obj('rail_g', 'glass', 0, G_UPPER)
 mb = MB(); mb.box(-9.68, -.6, -2.05, -1.92, 4.02, 4.1); mb.obj('rail_base', 'steel', .003, G_UPPER)
 mb = MB(); mb.box(-9.68, -.6, -1.97, 1.6, 4.02, 4.05); mb.obj('uterrace', 'tile', 0, G_UPPER)
-mb = MB(); mb.box(0.0, 5.0, -2.16, -2.1, 5.15, 6.05); mb.obj('hwin_f', 'alu', 0, G_UPPER)
-mb = MB(); mb.box(.08, 4.92, -2.19, -2.16, 5.22, 5.98); mb.obj('hwin_g', 'glass', 0, G_UPPER)
+# ventanal: marco de aluminio negro de 6 cm con dos montantes, vidrio y vierteaguas
+GY = -2.1 + WT * .42
+mb = MB()
+mb.box(WX0, WX1, GY - .045, GY + .045, WZ0, WZ0 + .06); mb.box(WX0, WX1, GY - .045, GY + .045, WZ1 - .06, WZ1)
+mb.box(WX0, WX0 + .06, GY - .045, GY + .045, WZ0, WZ1); mb.box(WX1 - .06, WX1, GY - .045, GY + .045, WZ0, WZ1)
+for xx in (WX0 + (WX1 - WX0) / 3, WX0 + 2 * (WX1 - WX0) / 3): mb.box(xx - .025, xx + .025, GY - .045, GY + .045, WZ0, WZ1)
+mb.box(WX0 - .02, WX1 + .02, -2.13, -2.1 + .06, WZ0 - .025, WZ0)
+mb.obj('vent_f', 'alu', .003, G_UPPER)
+mb = MB(); mb.box(WX0 + .04, WX1 - .04, GY - .006, GY + .006, WZ0 + .04, WZ1 - .04); mb.obj('vent_g', 'glass', 0, G_UPPER)
+# interior del estudio: suelo de roble, tabique con estantería y libros, escritorio, silla, butaca, lámpara y cortinas
+if HAVE_PH:
+    m, nt, b = newmat('floorwood'); M['floorwood'] = m; pbr(nt, b, 'oak_wood_planks', 1.2, nstr=.4, rough=(.3, .6))
+else: simple('floorwood', 0xb8875a, .4, coat=.3)
+simple('paint_in', 0xebe6dd, .9)
+mb = MB(); mb.box(-.36, 5.36, -1.86, 6.86, 4.02, 4.035); mb.obj('studyfloor', 'floorwood', 0, G_UPPER)
+mb = MB(); mb.box(-.36, 5.36, 3.3, 3.45, 4.035, 7.0); mb.obj('studywall', 'paint_in', .01, G_UPPER)
+mb = MB()
+for k in range(5): mb.box(.3, 4.7, 3.1, 3.3, 4.32 + k * .5, 4.35 + k * .5)
+for x in (.3, 1.4, 2.5, 3.6, 4.67): mb.box(x, x + .03, 3.1, 3.3, 4.32, 6.35)
+mb.obj('shelves', 'darkwood', .004, G_UPPER)
+for nm_, col_ in (('book1', 0x6b4a3a), ('book2', 0x2f3e4f), ('book3', 0xd8d0c0), ('book4', 0x7a7462), ('book5', 0x4d5a3c)): simple(nm_, col_, .7, spec=.3)
+bks = [MB() for _ in range(5)]; R2 = random.Random(5)
+for k in range(4):
+    x = .36
+    while x < 4.62:
+        if R2.random() < .12: x += R2.uniform(.15, .4); continue
+        wb = R2.uniform(.025, .05); hb = R2.uniform(.19, .3); db = R2.uniform(.15, .19)
+        R2.choice(bks).box(x, x + wb, 3.3 - db, 3.3, 4.35 + k * .5, 4.35 + k * .5 + hb); x += wb + .003
+for i_, bk in enumerate(bks): bk.obj('books%d' % i_, 'book%d' % (i_ + 1), .002, G_UPPER)
+mb = MB(); mb.cbox(2.65, -.75, 4.79, 1.9, .75, .04); mb.obj('desk', 'oak', .006, G_UPPER)
+mb = MB(); [mb.cbox(x, y, 4.42, .04, .04, .74) for x in (1.75, 3.55) for y in (-1.07, -.43)]; mb.obj('desklegs', 'black', 0, G_UPPER)
+mb = MB(); mb.cbox(2.65, -.1, 4.5, .52, .5, .08); mb.cbox(2.65, .14, 4.86, .5, .07, .64); mb.obj('dchair', 'fabric', .03, G_UPPER)
+mb = MB(); mb.cyl(2.65, -.1, 4.04, 4.46, .025, 8); mb.cyl(2.65, -.1, 4.035, 4.06, .3, 5); mb.obj('dchairbase', 'black', 0, G_UPPER)
+mb = MB(); mb.cbox(2.0, -.6, 4.86, .5, .3, .1); mb.obj('deskbook', 'book3', .004, G_UPPER)
+mb = MB(); mb.cbox(4.25, 1.55, 4.27, .85, .85, .4); mb.cbox(4.25, 1.92, 4.65, .85, .14, .5); mb.cbox(3.87, 1.55, 4.47, .1, .85, .25); mb.cbox(4.63, 1.55, 4.47, .1, .85, .25)
+mb.obj('armchair', 'fabriclight', .05, G_UPPER)
+mb = MB(); mb.cbox(3.6, 1.2, 4.04, 2.6, 1.9, .01); mb.obj('studyrug', 'rug', 0, G_UPPER)
+mb = MB(); mb.cyl(4.95, 2.35, 4.035, 5.55, .015, 8); mb.cyl(4.95, 2.35, 4.035, 4.06, .16, 16); mb.obj('flamp', 'black', 0, G_UPPER)
+mb = MB(); mb.cyl(4.95, 2.35, 5.55, 5.85, .2, 24, r2=.15); mb.obj('flampshade', 'lamp', 0, G_UPPER, smooth=True)
+mb = MB(); mb.cyl(.75, 2.5, 4.035, 4.45, .26, 24, r2=.3); mb.obj('studypot', 'concrete', .01, G_UPPER, smooth=True)
+# cortinas finas recogidas a los lados
+m, nt, b = newmat('sheer'); M['sheer'] = m; b.inputs['Base Color'].default_value = lin(0xf3f0ea); b.inputs['Roughness'].default_value = .85
+tl = node(nt, 'ShaderNodeBsdfTranslucent'); tl.inputs['Color'].default_value = lin(0xf3f0ea); tp = node(nt, 'ShaderNodeBsdfTransparent')
+mx1 = node(nt, 'ShaderNodeMixShader'); mx1.inputs[0].default_value = .45; L(nt, b.outputs[0], mx1.inputs[1]); L(nt, tl.outputs[0], mx1.inputs[2])
+mx2 = node(nt, 'ShaderNodeMixShader'); mx2.inputs[0].default_value = .3; L(nt, mx1.outputs[0], mx2.inputs[1]); L(nt, tp.outputs[0], mx2.inputs[2])
+L(nt, mx2.outputs[0], nt.nodes['Material Output'].inputs['Surface'])
+for (cx0, cx1) in ((WX0 + .08, WX0 + .75), (WX1 - .75, WX1 - .08)):
+    cm_ = MB(); n_ = 60
+    lo_ = [cm_.bm.verts.new((cx0 + (cx1 - cx0) * i / n_, GY + .14 + .045 * math.sin(i / n_ * 7 * 2 * math.pi), WZ0 + .03)) for i in range(n_ + 1)]
+    hi_ = [cm_.bm.verts.new((v.co.x, v.co.y, WZ1 - .04)) for v in lo_]
+    for i in range(n_): cm_.bm.faces.new((lo_[i], lo_[i + 1], hi_[i + 1], hi_[i]))
+    cm_.obj('curtain', 'sheer', 0, G_UPPER, smooth=True)
 mb = MB()
 for i in range(8): mb.cyl(-8.5 + i * 1.6, -1.2, 3.585, 3.6, .07, 16)
 mb.obj('downlights', 'downlight', 0, G_UPPER)
@@ -633,10 +688,11 @@ sun.rotation_euler = Euler((math.radians(90 - SUN_EL), 0, math.radians(SUN_AZ - 
 def area(name, loc, size, energy, color=(1, .82, .6), parent=None, rot=(0, 0, 0)):
     d = bpy.data.lights.new(name, 'AREA'); d.energy = energy; d.size = size; d.color = color
     o = bpy.data.objects.new(name, d); o.location = loc; o.rotation_euler = rot; COL.objects.link(o)
+    o.visible_camera = False   # se ve la luz, no el panel
     if parent: o.parent = parent
     return o
 area('in1', (-1.5, 4.5, 3.45), 4.0, 260, parent=G_BASE); area('in2', (2.5, 4.5, 3.45), 3.0, 180, parent=G_BASE)
-area('in3', (-4.5, 4.0, 6.85), 4.0, 200, parent=G_UPPER)
+area('in3', (-4.5, 4.0, 6.85), 4.0, 200, parent=G_UPPER); area('in4', (2.5, .9, 6.85), 3.2, 240, parent=G_UPPER)
 pl = bpy.data.lights.new('poollight', 'POINT'); pl.energy = 0; pl.color = (.55, .95, 1); pl.shadow_soft_size = 2.5
 plo = bpy.data.objects.new('poollight', pl); plo.location = (3, -6.6, -.9); COL.objects.link(plo)
 

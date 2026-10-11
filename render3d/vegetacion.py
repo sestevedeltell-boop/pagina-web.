@@ -338,6 +338,9 @@ if not VEG_ONLY:
             place('lavA', bx + vr(-w, w) * .9, by + vr(-d, d) * .9, vr(.8, 1.2))
     for i in range(14):
         place('lavA', -9.4 + i * .45, -11.95 + vr(-.05, .05), vr(.85, 1.1))
+    # olivo en maceta dentro del estudio de la planta alta
+    e = place('oliveB', .75, 2.5, .3, rot=1.2)
+    if e: e.location.z = 4.3; e.parent = G_UPPER
 
     # ---------------- entorno: pinares en manchas, olivares en hileras y cipreses junto a las casas
     def blocked(x, y):
