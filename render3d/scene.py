@@ -6,6 +6,8 @@ from mathutils import Vector, Matrix, Euler
 TEX = os.environ.get('UNIKAL_TEX', os.path.join(os.getcwd(), 'tex')) + '/'
 HERE = os.path.dirname(os.path.abspath(__file__))
 QUICK = bool(os.environ.get('UNIKAL_QUICK'))   # sin vegetación ni césped: pruebas rápidas
+PH = os.path.join(HERE, 'ph') + '/'            # recursos de Poly Haven (python3 polyhaven.py)
+HAVE_PH = os.path.exists(PH + 'sky.hdr') and not os.environ.get('UNIKAL_NO_PH')
 R = random.Random(7)
 def rr(a, b): return R.uniform(a, b)
 def lin(h):
@@ -60,6 +62,26 @@ def ramp(nt, inp, stops):
         e = el.new(pos); e.color = c
     L(nt, inp, r.inputs[0]); return r.outputs[0]
 
+def pbr(nt, b, name, size, tint=None, tint_fac=1., nstr=1., rough=None, scale=None):
+    """Textura PBR de Poly Haven (color, normal, rugosidad) en coordenadas de objeto, proyección en caja."""
+    tc = node(nt, 'ShaderNodeTexCoord'); mp = node(nt, 'ShaderNodeMapping')
+    mp.inputs['Scale'].default_value = scale or (1 / size,) * 3; L(nt, tc.outputs['Object'], mp.inputs['Vector'])
+    def tex(suffix, noncolor):
+        n = node(nt, 'ShaderNodeTexImage'); n.image = bpy.data.images.load(PH + '%s_%s.jpg' % (name, suffix), check_existing=True)
+        n.projection = 'BOX'; n.projection_blend = .25
+        if noncolor: n.image.colorspace_settings.name = 'Non-Color'
+        L(nt, mp.outputs[0], n.inputs['Vector']); return n
+    d = tex('diff', False).outputs[0]
+    col = mix(nt, tint_fac, d, lin(tint), 'MULTIPLY') if tint is not None else d
+    L(nt, col, b.inputs['Base Color'])
+    rg = tex('rough', True).outputs[0]
+    if rough:
+        mr = node(nt, 'ShaderNodeMapRange'); mr.inputs['To Min'].default_value, mr.inputs['To Max'].default_value = rough; L(nt, rg, mr.inputs['Value']); rg = mr.outputs[0]
+    L(nt, rg, b.inputs['Roughness'])
+    nm = node(nt, 'ShaderNodeNormalMap'); nm.inputs['Strength'].default_value = nstr; L(nt, tex('nor', True).outputs[0], nm.inputs['Color'])
+    L(nt, nm.outputs[0], b.inputs['Normal'])
+    return d
+
 M = {}
 def simple(name, color, rough=.5, metal=0., spec=.5, coat=0.):
     m, nt, b = newmat(name)
@@ -72,8 +94,16 @@ def simple(name, color, rough=.5, metal=0., spec=.5, coat=0.):
 m, nt, b = newmat('render'); M['render'] = m
 v = objcoord(nt); n1 = noise(nt, v, 1.2, 3); n2 = noise(nt, v, 60, 2)
 col = mix(nt, n1.outputs['Fac'], lin(0xe4e2dc), lin(0xf2f1ec))
-L(nt, col, b.inputs['Base Color']); b.inputs['Roughness'].default_value = .88
-L(nt, bump(nt, n2.outputs['Fac'], .06, .01), b.inputs['Normal'])
+if HAVE_PH:   # revoco: relieve y rugosidad reales, color blanco con un leve matiz de la textura
+    d = pbr(nt, b, 'painted_plaster_wall', 2.0, nstr=.35, rough=(.78, .95))
+    bw = node(nt, 'ShaderNodeRGBToBW'); L(nt, d, bw.inputs[0])
+    vr_ = node(nt, 'ShaderNodeMapRange'); vr_.inputs['From Min'].default_value = .45; vr_.inputs['From Max'].default_value = .75
+    vr_.inputs['To Min'].default_value = .95; vr_.inputs['To Max'].default_value = 1.02; L(nt, bw.outputs[0], vr_.inputs['Value'])
+    col = mix(nt, 1.0, col, vr_.outputs[0], 'MULTIPLY')
+    L(nt, col, b.inputs['Base Color'])
+else:
+    L(nt, col, b.inputs['Base Color']); b.inputs['Roughness'].default_value = .88
+    L(nt, bump(nt, n2.outputs['Fac'], .06, .01), b.inputs['Normal'])
 # Piedra en lajas
 m, nt, b = newmat('stone'); M['stone'] = m
 v = objcoord(nt, 3.0); t = img(nt, v, 'stone.jpg'); tn = img(nt, v, 'stone.jpg', True)
@@ -90,6 +120,36 @@ t = img(nt, v, 'wood.jpg'); r = img(nt, v, 'wood_r.jpg', True)
 wc0 = mix(nt, .5, t.outputs[0], lin(0x7a5638), 'MULTIPLY'); hs = node(nt, 'ShaderNodeHueSaturation'); hs.inputs['Saturation'].default_value = .72; hs.inputs['Hue'].default_value = .51; L(nt, wc0, hs.inputs['Color']); wc = hs.outputs[0]; bc = node(nt, 'ShaderNodeBrightContrast'); bc.inputs['Contrast'].default_value = .35; L(nt, wc, bc.inputs['Color']); L(nt, bc.outputs[0], b.inputs['Base Color'])
 L(nt, r.outputs[0], b.inputs['Roughness']); L(nt, bump(nt, img(nt, v, 'wood.jpg', True).outputs[0], .35, .01), b.inputs['Normal'])
 b.inputs['Coat Weight'].default_value = .15; b.inputs['Coat Roughness'].default_value = .2
+if HAVE_PH:
+    # tarima: veta real de roble teñida a teca, con tablas de 14 cm, juntas, testas y tono distinto por tabla
+    m, nt, b = newmat('wood'); M['wood'] = m
+    pbr(nt, b, 'oak_wood_planks', 1.2, tint=0xb8977a, tint_fac=1., nstr=.6, rough=(.35, .75), scale=(1 / 2.2, 1 / .62, 1 / .62))
+    b.inputs['Coat Weight'].default_value = .1; b.inputs['Coat Roughness'].default_value = .25
+    PW, PL = .14, 2.4
+    tcw = node(nt, 'ShaderNodeTexCoord'); sw = node(nt, 'ShaderNodeSeparateXYZ'); L(nt, tcw.outputs['Object'], sw.inputs[0])
+    def mth(op, a, b_=None, v=None):
+        n_ = node(nt, 'ShaderNodeMath'); n_.operation = op
+        for k_, x_ in enumerate((a, b_)):
+            if x_ is None: continue
+            if isinstance(x_, (int, float)): n_.inputs[k_].default_value = x_
+            else: L(nt, x_, n_.inputs[k_])
+        return n_.outputs[0]
+    yr = mth('DIVIDE', sw.outputs['Y'], PW); row = mth('FLOOR', yr); fy = mth('FRACT', yr)
+    ey = mth('MINIMUM', fy, mth('SUBTRACT', 1., fy))
+    wn = node(nt, 'ShaderNodeTexWhiteNoise'); wn.noise_dimensions = '1D'; L(nt, row, wn.inputs['W'])
+    xr = mth('DIVIDE', mth('ADD', sw.outputs['X'], mth('MULTIPLY', wn.outputs['Value'], PL)), PL); seg = mth('FLOOR', xr); fx = mth('FRACT', xr)
+    ex = mth('MINIMUM', fx, mth('SUBTRACT', 1., fx))
+    gy = node(nt, 'ShaderNodeMapRange'); gy.inputs['From Min'].default_value = .025; gy.inputs['From Max'].default_value = .06; L(nt, ey, gy.inputs['Value'])
+    gx = node(nt, 'ShaderNodeMapRange'); gx.inputs['From Min'].default_value = .0012; gx.inputs['From Max'].default_value = .003; L(nt, ex, gx.inputs['Value'])
+    seam = mth('MINIMUM', gy.outputs[0], gx.outputs[0])
+    wn2 = node(nt, 'ShaderNodeTexWhiteNoise'); wn2.noise_dimensions = '2D'; cmb_ = node(nt, 'ShaderNodeCombineXYZ'); L(nt, row, cmb_.inputs[0]); L(nt, seg, cmb_.inputs[1]); L(nt, cmb_.outputs[0], wn2.inputs['Vector'])
+    tone = node(nt, 'ShaderNodeMapRange'); tone.inputs['To Min'].default_value = .82; tone.inputs['To Max'].default_value = 1.12; L(nt, wn2.outputs['Value'], tone.inputs['Value'])
+    shade = node(nt, 'ShaderNodeMapRange'); shade.inputs['To Min'].default_value = .25; L(nt, seam, shade.inputs['Value'])
+    base_link = b.inputs['Base Color'].links[0].from_socket
+    col = mix(nt, 1.0, base_link, tone.outputs[0], 'MULTIPLY'); col = mix(nt, 1.0, col, shade.outputs[0], 'MULTIPLY'); L(nt, col, b.inputs['Base Color'])
+    nmn = b.inputs['Normal'].links[0].from_socket
+    bp = node(nt, 'ShaderNodeBump'); bp.inputs['Strength'].default_value = .6; bp.inputs['Distance'].default_value = .004
+    L(nt, seam, bp.inputs['Height']); L(nt, nmn, bp.inputs['Normal']); L(nt, bp.outputs[0], b.inputs['Normal'])
 # Gresite de piscina: teselas de vidrio de 2,5 cm (UV en metros), color por tesela, junta y cenefa en la línea de agua
 def mosaic(name, palette, band_palette, band_z, water_z, sigma=(.42, .075, .05)):
     m, nt, b = newmat(name); M[name] = m
@@ -147,6 +207,9 @@ tc = node(nt, 'ShaderNodeTexCoord'); v = tc.outputs['Object']
 n1 = noise(nt, v, .25, 5); n3 = noise(nt, v, 180, 2)
 base = ramp(nt, n1.outputs['Fac'], [(0.3, lin(0x2a3b19)), (0.6, lin(0x384c21)), (0.8, lin(0x48552a))])
 c3 = mix(nt, n3.outputs['Fac'], base, lin(0x3a3223), 'MIX'); fin = mix(nt, .35, base, c3, 'MIX'); L(nt, fin, b.inputs['Base Color'])
+if HAVE_PH:
+    d = pbr(nt, b, 'grass_ground', 2.5, nstr=.8)
+    L(nt, mix(nt, .55, fin, d, 'MULTIPLY'), b.inputs['Base Color'])
 b.inputs['Roughness'].default_value = .95; b.inputs['Specular IOR Level'].default_value = .3
 L(nt, bump(nt, n3.outputs['Fac'], .9, .02), b.inputs['Normal'])
 # Terreno seco exterior con perspectiva aérea
@@ -171,6 +234,9 @@ n1 = noise(nt, v, .06, 6); n2 = noise(nt, v, .9, 4); n3 = noise(nt, v, 30, 2)
 nf = node(nt, 'ShaderNodeMath'); nf.operation = 'MULTIPLY'; nf.inputs[1].default_value = .45; L(nt, n1.outputs['Fac'], nf.inputs[0])
 c = mix(nt, nf.outputs[0], parc, lin(0x45522a))
 c = mix(nt, .25, c, ramp(nt, n2.outputs['Fac'], [(0.35, lin(0x55552f)), (0.65, lin(0x7a7040))]), 'MIX')
+if HAVE_PH:
+    d = pbr(nt, b, 'aerial_grass_rock', 15.0, nstr=.7)
+    c = mix(nt, .55, c, d, 'OVERLAY')
 haze(nt, c, b, 2600.); b.inputs['Roughness'].default_value = 1
 L(nt, bump(nt, n3.outputs['Fac'], .5, .05), b.inputs['Normal'])
 m, nt, b = newmat('hills'); M['hills'] = m
@@ -526,26 +592,39 @@ simple('npool', 0x2fb6c9, .05); nbp.obj('neighborpools', 'npool')
 
 # ------------------------------------------------------------------ luces, cielo, cámara
 SUN_EL, SUN_AZ = 33, 145   # sun_rotation: 0=+Y, 90=+X -> sol delante-derecha
-w = bpy.data.worlds.new('sky'); sc.world = w; w.use_nodes = True; nt = w.node_tree
-sky = nt.nodes.new('ShaderNodeTexSky'); sky.sky_type = 'NISHITA'; sky.sun_disc = False
-sky.sun_elevation = math.radians(SUN_EL); sky.sun_rotation = math.radians(SUN_AZ); sky.air_density = 1.0; sky.dust_density = .45; sky.ozone_density = 1.2; sky.altitude = 150
-bg = nt.nodes['Background']; bg.inputs['Strength'].default_value = .3
-# nubes: ruido proyectado sobre un plano a gran altura
-tcw = nt.nodes.new('ShaderNodeTexCoord'); sep = nt.nodes.new('ShaderNodeSeparateXYZ'); nt.links.new(tcw.outputs['Generated'], sep.inputs[0])
-dv = nt.nodes.new('ShaderNodeVectorMath'); dv.operation = 'DIVIDE'; nt.links.new(tcw.outputs['Generated'], dv.inputs[0])
-cz = nt.nodes.new('ShaderNodeMath'); cz.operation = 'MAXIMUM'; cz.inputs[1].default_value = .04; nt.links.new(sep.outputs['Z'], cz.inputs[0])
-cmb = nt.nodes.new('ShaderNodeCombineXYZ'); [nt.links.new(cz.outputs[0], cmb.inputs[k]) for k in range(3)]; nt.links.new(cmb.outputs[0], dv.inputs[1])
-cn = nt.nodes.new('ShaderNodeTexNoise'); cn.inputs['Scale'].default_value = 1.6; cn.inputs['Detail'].default_value = 8; cn.inputs['Roughness'].default_value = .62
-nt.links.new(dv.outputs[0], cn.inputs['Vector'])
-cr = nt.nodes.new('ShaderNodeValToRGB'); cr.color_ramp.elements[0].position = .56; cr.color_ramp.elements[1].position = .78; nt.links.new(cn.outputs['Fac'], cr.inputs[0])
-hz = nt.nodes.new('ShaderNodeMapRange'); hz.inputs['From Min'].default_value = .02; hz.inputs['From Max'].default_value = .25; nt.links.new(sep.outputs['Z'], hz.inputs['Value'])
-cm = nt.nodes.new('ShaderNodeMath'); cm.operation = 'MULTIPLY'; nt.links.new(cr.outputs[0], cm.inputs[0]); nt.links.new(hz.outputs[0], cm.inputs[1])
-cm2 = nt.nodes.new('ShaderNodeMath'); cm2.operation = 'MULTIPLY'; cm2.inputs[1].default_value = .85; nt.links.new(cm.outputs[0], cm2.inputs[0])
-ccol = nt.nodes.new('ShaderNodeMixRGB'); ccol.inputs['Color2'].default_value = (14., 14., 14.5, 1)
-nt.links.new(cn.outputs['Fac'], ccol.inputs['Fac']); ccol.inputs['Color1'].default_value = (7., 7.4, 8.2, 1)
-skymix = nt.nodes.new('ShaderNodeMixRGB'); nt.links.new(cm2.outputs[0], skymix.inputs['Fac']); nt.links.new(sky.outputs[0], skymix.inputs['Color1']); nt.links.new(ccol.outputs[0], skymix.inputs['Color2'])
-nt.links.new(skymix.outputs[0], bg.inputs[0])
+if HAVE_PH:
+    # kloofendal_38d_partly_cloudy_puresky: sol a 37,9° de altura y azimut -35,9° (atan2) en la imagen;
+    # se gira el cielo para dejarlo donde estaba el sol de la escena (azimut 145°, delante a la derecha)
+    SUN_EL = 37.9; K_SKY = 1.75
+    w = bpy.data.worlds.new('sky'); sc.world = w; w.use_nodes = True; nt = w.node_tree
+    tcw = nt.nodes.new('ShaderNodeTexCoord'); mpw = nt.nodes.new('ShaderNodeMapping'); mpw.inputs['Rotation'].default_value = (0, 0, math.radians(19.1))
+    env = nt.nodes.new('ShaderNodeTexEnvironment'); env.image = bpy.data.images.load(PH + 'sky.hdr')
+    nt.links.new(tcw.outputs['Generated'], mpw.inputs['Vector']); nt.links.new(mpw.outputs[0], env.inputs['Vector'])
+    dk = nt.nodes.new('ShaderNodeMixRGB'); dk.blend_type = 'DARKEN'; dk.inputs['Fac'].default_value = 1; dk.inputs['Color2'].default_value = (50, 50, 50, 1)
+    nt.links.new(env.outputs[0], dk.inputs['Color1'])
+    bg = nt.nodes['Background']; bg.inputs['Strength'].default_value = K_SKY; nt.links.new(dk.outputs[0], bg.inputs[0])
+else:
+    w = bpy.data.worlds.new('sky'); sc.world = w; w.use_nodes = True; nt = w.node_tree
+    sky = nt.nodes.new('ShaderNodeTexSky'); sky.sky_type = 'NISHITA'; sky.sun_disc = False
+    sky.sun_elevation = math.radians(SUN_EL); sky.sun_rotation = math.radians(SUN_AZ); sky.air_density = 1.0; sky.dust_density = .45; sky.ozone_density = 1.2; sky.altitude = 150
+    bg = nt.nodes['Background']; bg.inputs['Strength'].default_value = .3
+    # nubes: ruido proyectado sobre un plano a gran altura
+    tcw = nt.nodes.new('ShaderNodeTexCoord'); sep = nt.nodes.new('ShaderNodeSeparateXYZ'); nt.links.new(tcw.outputs['Generated'], sep.inputs[0])
+    dv = nt.nodes.new('ShaderNodeVectorMath'); dv.operation = 'DIVIDE'; nt.links.new(tcw.outputs['Generated'], dv.inputs[0])
+    cz = nt.nodes.new('ShaderNodeMath'); cz.operation = 'MAXIMUM'; cz.inputs[1].default_value = .04; nt.links.new(sep.outputs['Z'], cz.inputs[0])
+    cmb = nt.nodes.new('ShaderNodeCombineXYZ'); [nt.links.new(cz.outputs[0], cmb.inputs[k]) for k in range(3)]; nt.links.new(cmb.outputs[0], dv.inputs[1])
+    cn = nt.nodes.new('ShaderNodeTexNoise'); cn.inputs['Scale'].default_value = 1.6; cn.inputs['Detail'].default_value = 8; cn.inputs['Roughness'].default_value = .62
+    nt.links.new(dv.outputs[0], cn.inputs['Vector'])
+    cr = nt.nodes.new('ShaderNodeValToRGB'); cr.color_ramp.elements[0].position = .56; cr.color_ramp.elements[1].position = .78; nt.links.new(cn.outputs['Fac'], cr.inputs[0])
+    hz = nt.nodes.new('ShaderNodeMapRange'); hz.inputs['From Min'].default_value = .02; hz.inputs['From Max'].default_value = .25; nt.links.new(sep.outputs['Z'], hz.inputs['Value'])
+    cm = nt.nodes.new('ShaderNodeMath'); cm.operation = 'MULTIPLY'; nt.links.new(cr.outputs[0], cm.inputs[0]); nt.links.new(hz.outputs[0], cm.inputs[1])
+    cm2 = nt.nodes.new('ShaderNodeMath'); cm2.operation = 'MULTIPLY'; cm2.inputs[1].default_value = .85; nt.links.new(cm.outputs[0], cm2.inputs[0])
+    ccol = nt.nodes.new('ShaderNodeMixRGB'); ccol.inputs['Color2'].default_value = (14., 14., 14.5, 1)
+    nt.links.new(cn.outputs['Fac'], ccol.inputs['Fac']); ccol.inputs['Color1'].default_value = (7., 7.4, 8.2, 1)
+    skymix = nt.nodes.new('ShaderNodeMixRGB'); nt.links.new(cm2.outputs[0], skymix.inputs['Fac']); nt.links.new(sky.outputs[0], skymix.inputs['Color1']); nt.links.new(ccol.outputs[0], skymix.inputs['Color2'])
+    nt.links.new(skymix.outputs[0], bg.inputs[0])
 sun_d = bpy.data.lights.new('sun', 'SUN'); sun_d.energy = 4.2; sun_d.angle = math.radians(.8); sun_d.color = (1.0, .95, .88)
+if HAVE_PH: sun_d.energy = 2.4 * K_SKY; sun_d.angle = math.radians(.6); sun_d.color = (1.0, .957, .873)   # irradiancia y color medidos del sol del HDRI
 sun_d.cycles.is_caustics_light = True
 sun = bpy.data.objects.new('sun', sun_d); COL.objects.link(sun)
 # dirección de la luz coherente con el cielo: rotación Z = azimut, X = 90-elevación

@@ -66,6 +66,10 @@ foliage_mat('lav_flower', [(0, 0x5d4a8c), (.5, 0x7a62a8), (1, 0x8e78b8)], transl
 bark_mat('olive_bark', [(0, 0x57514a), (.5, 0x746d61), (1, 0x8d8576)], 18, 3.0, .8, 1.0)
 bark_mat('pine_bark', [(0, 0x382a22), (.45, 0x4c392d), (.8, 0x5c4534), (1, 0x67503f)], 8, 2.5, 1.0, 1.0)
 bark_mat('cypress_bark', [(0, 0x3e3328), (1, 0x5e4d3c)], 14, 5.0, .5, .6)
+if HAVE_PH:   # cortezas fotografiadas (Poly Haven)
+    for nm_, tex_, size_, tint_ in (('olive_bark', 'tree_bark_03', .8, 0x9a958a), ('pine_bark', 'pine_bark', 1.2, None), ('cypress_bark', 'chinese_cedar_bark', 1.0, None)):
+        m, nt, b = newmat(nm_); M[nm_] = m
+        pbr(nt, b, tex_, size_, tint=tint_, tint_fac=.5, nstr=1.2, rough=(.8, 1.))
 simple('innerdark', 0x17240f, 1., spec=.2)
 simple('pine_inner', 0x1f3015, 1., spec=.2)
 
