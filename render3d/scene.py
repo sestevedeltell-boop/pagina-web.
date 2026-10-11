@@ -7,7 +7,8 @@ TEX = os.environ.get('UNIKAL_TEX', os.path.join(os.getcwd(), 'tex')) + '/'
 HERE = os.path.dirname(os.path.abspath(__file__))
 QUICK = bool(os.environ.get('UNIKAL_QUICK'))   # sin vegetación ni césped: pruebas rápidas
 PH = os.path.join(HERE, 'ph') + '/'            # recursos de Poly Haven (python3 polyhaven.py)
-HAVE_PH = os.path.exists(PH + 'sky.hdr') and not os.environ.get('UNIKAL_NO_PH')
+SKY = 'sky_kloofendal_48d_partly_cloudy_puresky.hdr'   # (python3 polyhaven.py)
+HAVE_PH = os.path.exists(PH + SKY) and not os.environ.get('UNIKAL_NO_PH')
 R = random.Random(7)
 def rr(a, b): return R.uniform(a, b)
 def lin(h):
@@ -129,10 +130,13 @@ if HAVE_PH and os.path.exists(PH + 'stacked_stone_wall_diff.jpg'):
     m, nt, b = newmat('stone'); M['stone'] = m
     # (la foto es oscura y rojiza: se desatura y se aclara hasta una caliza clara, gris cálido)
     pbr(nt, b, 'stacked_stone_wall', 1.6, tint=0xf7efe2, nstr=1.3, rough=(.78, .97), sat=.28, gain=3.3, ao=.6, disp=.03)
-# Porcelánico exterior
-m, nt, b = newmat('tile'); M['tile'] = m
-v = objcoord(nt, 2.4); t = img(nt, v, 'tile.jpg'); L(nt, t.outputs[0], b.inputs['Base Color'])
-b.inputs['Roughness'].default_value = .38; L(nt, bump(nt, img(nt, v, 'tile.jpg', True).outputs[0], .15, .005), b.inputs['Normal'])
+# Porcelánico (interior limpio; exterior con algo de suciedad y marcas de agua cerca de la piscina)
+def tilemat(name):
+    m, nt, b = newmat(name); M[name] = m
+    v = objcoord(nt, 2.4); t = img(nt, v, 'tile.jpg'); L(nt, t.outputs[0], b.inputs['Base Color'])
+    b.inputs['Roughness'].default_value = .38; L(nt, bump(nt, img(nt, v, 'tile.jpg', True).outputs[0], .15, .005), b.inputs['Normal'])
+    return m, nt, b
+m, nt, b = tilemat('tile')
 def tile_joints(nt, b, tw, th, gap, tone=(.95, 1.04)):
     """Juntas de piezas rectangulares (coordenadas de objeto X/Y) y tono distinto por pieza."""
     tcj = node(nt, 'ShaderNodeTexCoord'); spj = node(nt, 'ShaderNodeSeparateXYZ'); L(nt, tcj.outputs['Object'], spj.inputs[0])
@@ -159,6 +163,35 @@ def tile_joints(nt, b, tw, th, gap, tone=(.95, 1.04)):
     if nsrc is not None: L(nt, nsrc, bp.inputs['Normal'])
     L(nt, bp.outputs[0], b.inputs['Normal'])
 tile_joints(nt, b, 1.2, .6, .004)
+def weather(nt, b, grime=1., wet=0., wet_mask=None):
+    """Uso y exterior: manchas grandes de polvo, puntitos y, donde wet_mask (0-1), marcas de agua oscuras y brillantes."""
+    tc_ = node(nt, 'ShaderNodeTexCoord'); v_ = tc_.outputs['Object']
+    src = b.inputs['Base Color'].links[0].from_socket
+    big = noise(nt, v_, .35, 4, .6); gm = node(nt, 'ShaderNodeMapRange'); L(nt, big.outputs['Fac'], gm.inputs['Value'])
+    gm.inputs['From Min'].default_value = .38; gm.inputs['From Max'].default_value = .72; gm.inputs['To Min'].default_value = 1.; gm.inputs['To Max'].default_value = 1 - .13 * grime
+    sp = noise(nt, v_, 14, 2, .5); sm = node(nt, 'ShaderNodeMapRange'); L(nt, sp.outputs['Fac'], sm.inputs['Value'])
+    sm.inputs['From Min'].default_value = .58; sm.inputs['From Max'].default_value = .7; sm.inputs['To Min'].default_value = 1.; sm.inputs['To Max'].default_value = 1 - .1 * grime
+    col_ = mix(nt, 1., mix(nt, 1., src, gm.outputs[0], 'MULTIPLY'), sm.outputs[0], 'MULTIPLY')
+    tf_ = node(nt, 'ShaderNodeMath'); tf_.operation = 'MULTIPLY'; tf_.inputs[1].default_value = .3 * grime; L(nt, big.outputs['Fac'], tf_.inputs[0])
+    col_ = mix(nt, tf_.outputs[0], col_, mix(nt, 1., col_, lin(0xb9b0a2), 'MULTIPLY'))   # tinte terroso en las zonas sucias
+    if wet:
+        wn_ = noise(nt, v_, 1.6, 4, .62); wd_ = node(nt, 'ShaderNodeVectorMath'); wd_.operation = 'MULTIPLY_ADD'
+        L(nt, wn_.outputs['Color'], wd_.inputs[0]); wd_.inputs[1].default_value = (.6, .6, .6); L(nt, v_, wd_.inputs[2])
+        wn2 = noise(nt, wd_.outputs[0], 3.2, 3, .55); wmk = node(nt, 'ShaderNodeMapRange'); L(nt, wn2.outputs['Fac'], wmk.inputs['Value'])
+        wmk.inputs['From Min'].default_value = .6 - .08 * wet; wmk.inputs['From Max'].default_value = .63 - .08 * wet
+        wf = wmk.outputs[0]
+        if wet_mask is not None:
+            mm_ = node(nt, 'ShaderNodeMath'); mm_.operation = 'MULTIPLY'; L(nt, wf, mm_.inputs[0]); L(nt, wet_mask, mm_.inputs[1]); wf = mm_.outputs[0]
+        col_ = mix(nt, wf, col_, mix(nt, 1., col_, lin(0x9b9890), 'MULTIPLY'))
+        rg_ = node(nt, 'ShaderNodeMapRange'); L(nt, wf, rg_.inputs['Value']); rg_.inputs['To Min'].default_value = b.inputs['Roughness'].default_value; rg_.inputs['To Max'].default_value = .1
+        L(nt, rg_.outputs[0], b.inputs['Roughness'])
+    L(nt, col_, b.inputs['Base Color'])
+m, nt, b = tilemat('tile_ext'); tile_joints(nt, b, 1.2, .6, .004)
+_tc = node(nt, 'ShaderNodeTexCoord'); _sp = node(nt, 'ShaderNodeSeparateXYZ'); L(nt, _tc.outputs['Object'], _sp.inputs[0])
+_wm = node(nt, 'ShaderNodeMapRange'); L(nt, _sp.outputs['Y'], _wm.inputs['Value'])   # marcas de agua solo junto a la piscina
+_wm.inputs['From Min'].default_value = -2.4; _wm.inputs['From Max'].default_value = -3.6
+weather(nt, b, 1., .8, _wm.outputs[0])
+m, nt, b = tilemat('coping'); tile_joints(nt, b, .6, .4, .004, (.92, 1.05)); weather(nt, b, 1.3, 1.)
 # Tarima de ipe
 m, nt, b = newmat('wood'); M['wood'] = m
 v = objcoord(nt, 1.12); v.node.inputs['Scale'].default_value = (1 / 3.6, 1 / .9, 1 / .9)  # tablas largas en X, de unos 11 cm
@@ -230,6 +263,13 @@ def mosaic(name, palette, band_palette, band_z, water_z, sigma=(.42, .075, .05))
     gr = node(nt, 'ShaderNodeMapRange'); gr.inputs['From Min'].default_value = .035; gr.inputs['From Max'].default_value = .075
     gr.inputs['To Min'].default_value = 1; gr.inputs['To Max'].default_value = 0; L(nt, e.outputs[0], gr.inputs['Value'])
     col = mix(nt, gr.outputs[0], tile, lin(0xd9dcd8))
+    # línea de cal y verdín justo en la línea de agua de las paredes
+    wl = node(nt, 'ShaderNodeMath'); wl.operation = 'SUBTRACT'; L(nt, sp.outputs['Z'], wl.inputs[0]); wl.inputs[1].default_value = water_z + .008
+    wla = node(nt, 'ShaderNodeMath'); wla.operation = 'ABSOLUTE'; L(nt, wl.outputs[0], wla.inputs[0])
+    wlm = node(nt, 'ShaderNodeMapRange'); L(nt, wla.outputs[0], wlm.inputs['Value']); wlm.inputs['From Min'].default_value = .012; wlm.inputs['From Max'].default_value = .035
+    wlm.inputs['To Min'].default_value = .55; wlm.inputs['To Max'].default_value = 0
+    wlw = node(nt, 'ShaderNodeMath'); wlw.operation = 'MULTIPLY'; L(nt, wlm.outputs[0], wlw.inputs[0]); L(nt, wall.outputs[0], wlw.inputs[1])
+    col = mix(nt, wlw.outputs[0], col, lin(0x7d8a7a), 'MULTIPLY')
     # absorción del agua: el rojo se pierde con la profundidad (ida y vuelta de la luz)
     dz = node(nt, 'ShaderNodeMath'); dz.operation = 'SUBTRACT'; dz.inputs[0].default_value = water_z; L(nt, sp.outputs['Z'], dz.inputs[1])
     dz2 = node(nt, 'ShaderNodeMath'); dz2.operation = 'MAXIMUM'; dz2.inputs[1].default_value = 0; L(nt, dz.outputs[0], dz2.inputs[0])
@@ -283,12 +323,44 @@ c = mix(nt, .25, c, ramp(nt, n2.outputs['Fac'], [(0.35, lin(0x55552f)), (0.65, l
 if HAVE_PH:
     d = pbr(nt, b, 'aerial_grass_rock', 15.0, nstr=.7)
     c = mix(nt, .55, c, d, 'OVERLAY')
+# mapa del suelo del bosque (lo pinta vegetacion.py): R = caminos de tierra, G = claros de pradera seca, B = bajo las copas
+GM = 640.   # metros que cubre el mapa, centrado en la casa
+gimg = bpy.data.images.new('groundmap', 1024, 1024, alpha=True, float_buffer=False); gimg.colorspace_settings.name = 'Non-Color'
+gmp = node(nt, 'ShaderNodeMapping'); gmp.inputs['Scale'].default_value = (1 / GM, 1 / GM, 1); gmp.inputs['Location'].default_value = (.5, .5, 0)
+L(nt, v, gmp.inputs['Vector'])
+gti = node(nt, 'ShaderNodeTexImage'); gti.image = gimg; gti.extension = 'CLIP'; gti.interpolation = 'Linear'; L(nt, gmp.outputs[0], gti.inputs['Vector'])
+gsp = node(nt, 'ShaderNodeSeparateColor'); L(nt, gti.outputs['Color'], gsp.inputs[0])
+nlit = noise(nt, v, .35, 5, .6)   # hojarasca: manchas pardas y verdes bajo las copas
+litter = mix(nt, nlit.outputs['Fac'], lin(0x3c3122), lin(0x46492a))
+cmul = node(nt, 'ShaderNodeMath'); cmul.operation = 'MULTIPLY'; cmul.inputs[1].default_value = .75; L(nt, gsp.outputs['Blue'], cmul.inputs[0])
+c = mix(nt, cmul.outputs[0], c, litter)
+nmd = noise(nt, v, .12, 5, .6)   # pradera seca: hierba agostada con manchas verdes
+meadow = mix(nt, nmd.outputs['Fac'], lin(0x8c7d4b), lin(0x5f6435))
+c = mix(nt, gsp.outputs['Green'], c, meadow)
+if HAVE_PH:
+    pm_ = node(nt, 'ShaderNodeMapping'); pm_.inputs['Scale'].default_value = (1 / 2.5,) * 3; L(nt, v, pm_.inputs['Vector'])
+    pt_ = node(nt, 'ShaderNodeTexImage'); pt_.image = bpy.data.images.load(PH + 'gravel_road_diff.jpg', check_existing=True); L(nt, pm_.outputs[0], pt_.inputs['Vector'])
+    dirt = mix(nt, 1., pt_.outputs['Color'], lin(0xd8c8a8), 'MULTIPLY')
+else: dirt = lin(0x8f7f62)
+c = mix(nt, gsp.outputs['Red'], c, dirt)
 haze(nt, c, b, 2600.); b.inputs['Roughness'].default_value = 1
 L(nt, bump(nt, n3.outputs['Fac'], .5, .05), b.inputs['Normal'])
 m, nt, b = newmat('hills'); M['hills'] = m
-tc = node(nt, 'ShaderNodeTexCoord'); n1 = noise(nt, tc.outputs['Object'], .01, 5); n2 = noise(nt, tc.outputs['Object'], .12, 6, .7)
-c = ramp(nt, n1.outputs['Fac'], [(0.4, lin(0x2c3b1e)), (0.6, lin(0x3a4a26))]); c = mix(nt, n2.outputs['Fac'], lin(0x1c2814), c); haze(nt, c, b, 2200.)   # montes con bosque, algo azulados por la distancia
-L(nt, bump(nt, n2.outputs['Fac'], 1.0, 2.0), b.inputs['Normal'])
+# montes con bosque mediterráneo: copas (Voronoi), claros de matorral seco, roca en las pendientes fuertes y crestas;
+# algo azulados por la distancia (perspectiva aérea)
+tc = node(nt, 'ShaderNodeTexCoord'); v = tc.outputs['Object']
+n1 = noise(nt, v, .01, 5); n2 = noise(nt, v, .12, 6, .7); n4 = noise(nt, v, .025, 4, .6)
+cv_ = node(nt, 'ShaderNodeTexVoronoi'); cv_.inputs['Scale'].default_value = .09; cv_.feature = 'F1'; L(nt, v, cv_.inputs['Vector'])
+crown = node(nt, 'ShaderNodeMapRange'); L(nt, cv_.outputs['Distance'], crown.inputs['Value']); crown.inputs['From Max'].default_value = .9
+c = ramp(nt, n1.outputs['Fac'], [(0.4, lin(0x2a3a1c)), (0.6, lin(0x384a25))])
+c = mix(nt, crown.outputs[0], c, lin(0x16200f))                                  # sombra entre copas
+dry_ = node(nt, 'ShaderNodeMapRange'); L(nt, n4.outputs['Fac'], dry_.inputs['Value']); dry_.inputs['From Min'].default_value = .55; dry_.inputs['From Max'].default_value = .68
+c = mix(nt, dry_.outputs[0], c, mix(nt, n2.outputs['Fac'], lin(0x6a6340), lin(0x857a52)))   # claros de matorral y pasto seco
+geo_h = node(nt, 'ShaderNodeNewGeometry'); sz_h = node(nt, 'ShaderNodeSeparateXYZ'); L(nt, geo_h.outputs['Normal'], sz_h.inputs[0])
+rk = node(nt, 'ShaderNodeMapRange'); L(nt, sz_h.outputs['Z'], rk.inputs['Value']); rk.inputs['From Min'].default_value = .78; rk.inputs['From Max'].default_value = .62
+c = mix(nt, rk.outputs[0], c, mix(nt, n2.outputs['Fac'], lin(0x6f685c), lin(0x938b7c)))       # roca caliza en las pendientes
+haze(nt, c, b, 2200.)
+L(nt, bump(nt, mix(nt, .5, n2.outputs['Fac'], crown.outputs[0]), 1.0, 3.0), b.inputs['Normal'])
 b.inputs['Roughness'].default_value = 1
 # Vidrio (deja pasar la luz para sombras: interiores iluminados)
 def glassmat(name, tint=0xf2f6f5, rough=0., coat=0.):
@@ -421,24 +493,41 @@ def rect_hole(mb, outer, hole, z):
         mb.poly([(a[0], a[2], z), (a[1], a[2], z), (a[1], a[3], z), (a[0], a[3], z)])
 mb = MB(); rect_hole(mb, (-1500, 1500, -1500, 1500), (-16, 18, -13.5, 13.5), -0.02); mb.obj('land', 'land')
 mb = MB()
-for (x0, x1, y0, y1) in ((-16, 18, 7.2, 13.5), (-16, -9.8, -13.5, 7.2), (9.4, 18, -13.5, 7.2), (-9.8, 9.4, -13.5, -11.6), (6.5, 9.4, 1.0, 7.2), (9.0, 9.4, -4.0, 1.0)):
+# (alrededor de la plataforma queda una banda de grava de 45-50 cm con pletina de acero: ver detalles.py)
+for (x0, x1, y0, y1) in ((-16, 18, 7.65, 13.5), (-16, -10.1, 7.2, 7.65), (7.0, 18, 7.2, 7.65), (-16, -10.1, -4.0, 7.2), (-16, -9.8, -13.5, -4.0),
+                         (9.4, 18, -13.5, 7.2), (-9.8, 9.4, -13.5, -11.6), (7.0, 9.4, 1.45, 7.2)):
     mb.poly([(x0, y0, 0), (x1, y0, 0), (x1, y1, 0), (x0, y1, 0)])
 mb.obj('lawn', 'lawn')
-# Montañas
-mb = MB(); segA, rings = 220, 9
-grid = []
-for ri in range(rings):
-    rad = 520 + ri * 75; row = []
-    for a in range(segA):
-        ang = a / segA * 2 * math.pi
-        n = math.sin(ang * 3 + 1.3) * .5 + math.sin(ang * 7 + .4) * .28 + math.sin(ang * 17 + 2) * .12 + math.sin(ang * 41) * .05 + math.sin(ang * 83 + 1) * .03
-        back = .45 + .55 * (0.5 + 0.5 * math.sin(ang))
-        h = 0 if ri in (0, rings - 1) else max(0, (75 + n * 70) * math.sin(ri / (rings - 1) * math.pi) * back + rr(-4, 4))
-        row.append(mb.bm.verts.new((math.cos(ang) * rad, math.sin(ang) * rad, h - 2)))
-    grid.append(row)
-for ri in range(rings - 1):
-    for a in range(segA): mb.bm.faces.new((grid[ri][a], grid[ri][(a + 1) % segA], grid[ri + 1][(a + 1) % segA], grid[ri + 1][a]))
-mb.obj('hills', 'hills', smooth=True)
+# Montañas: la misma silueta de antes (sierras más altas al fondo) con relieve fractal, crestas y barrancos
+import numpy as np
+_perm = np.random.default_rng(11).permutation(256); _perm = np.concatenate([_perm, _perm])
+def vnoise_np(x, y):
+    ix, iy = np.floor(x).astype(int), np.floor(y).astype(int); fx, fy = x - ix, y - iy
+    h = lambda i, j: _perm[(_perm[i & 255] + j) & 255] / 255.
+    sx, sy = fx * fx * (3 - 2 * fx), fy * fy * (3 - 2 * fy)
+    a = h(ix, iy) + (h(ix + 1, iy) - h(ix, iy)) * sx; b_ = h(ix, iy + 1) + (h(ix + 1, iy + 1) - h(ix, iy + 1)) * sx
+    return a + (b_ - a) * sy
+def fbm_np(x, y, oct_=6, ridged=False):
+    t, amp, f, tot = 0., 1., 1., 0.
+    for k in range(oct_):
+        n = vnoise_np(x * f + k * 17.3, y * f - k * 9.1)
+        if ridged: n = (1 - abs(2 * n - 1)) ** 2
+        t += n * amp; tot += amp; amp *= .5; f *= 2.03
+    return t / tot
+segA, rings = 900, 40
+ang = np.linspace(0, 2 * np.pi, segA, endpoint=False); rads = np.linspace(500, 1150, rings)
+A_, R_ = np.meshgrid(ang, rads); X_, Y_ = np.cos(A_) * R_, np.sin(A_) * R_
+nA = np.sin(A_ * 3 + 1.3) * .5 + np.sin(A_ * 7 + .4) * .28 + np.sin(A_ * 17 + 2) * .12
+back = .45 + .55 * (.5 + .5 * np.sin(A_))
+env = np.sin((R_ - 500) / 650 * np.pi) ** .8
+H_ = (60 + nA * 55 + 70 * (fbm_np(X_ / 260, Y_ / 260) - .5) + 55 * fbm_np(X_ / 140, Y_ / 140, 6, True)) * env * back
+H_ = np.maximum(H_, 0); H_[0] = 0; H_[-1] = 0
+V_ = np.stack([X_.ravel(), Y_.ravel(), H_.ravel() - 2], 1)
+idx = np.arange(segA * rings).reshape(rings, segA)
+F_ = np.stack([idx[:-1], np.roll(idx[:-1], -1, 1), np.roll(idx[1:], -1, 1), idx[1:]], -1).reshape(-1, 4)
+me_h = bpy.data.meshes.new('hills'); me_h.from_pydata(V_.tolist(), [], F_.tolist()); me_h.update()
+me_h.polygons.foreach_set('use_smooth', [True] * len(me_h.polygons))
+ob_h = bpy.data.objects.new('hills', me_h); COL.objects.link(ob_h); me_h.materials.append(M['hills'])
 
 # Muros perimetrales con lamas
 mb = MB()
@@ -462,7 +551,7 @@ mb.obj('stepstones', 'concrete', .01)
 # ------------------------------------------------------------------ vivienda
 # Plataforma, terraza y escalón (BASE)
 mb = MB(); mb.box(-9.6, 6.5, 1.0, 7.2, 0, .3); mb.box(-9.6, 8.9, -3.5, 1.0, 0, .3); mb.box(-9.6, 9.0, -4.0, -3.5, 0, .15)
-mb.obj('terrace', 'tile', .01, G_BASE)
+mb.obj('terrace', 'tile_ext', .01, G_BASE)
 # Interior planta baja
 mb = MB(); mb.box(-6.4, 4.0, 1.2, 6.9, .3, .31); mb.obj('floor_in', 'tile', 0, G_BASE)
 # Salón: sofá modular en L con cojines, alfombra de lana, mesas de centro de piedra, mueble de TV volado con luz
@@ -595,11 +684,31 @@ for cn_, bx_ in (('cut_slot', (SX0, SX1, .9, 1.3, SZ0, SZ1)), ('cut_room', (4.24
     md = gw2.modifiers.new(cn_, 'BOOLEAN'); md.operation = 'DIFFERENCE'; md.solver = 'EXACT'; md.object = c_
 md = gw2.modifiers.new('bev', 'BEVEL'); md.width = .012; md.segments = 2; md.limit_method = 'ANGLE'; md.use_clamp_overlap = True
 def glazing(name, x0, x1, y, z0, z1, panes, parent):
-    mb = MB(); mb.box(x0, x1, y - .015, y + .015, z0 + .06, z1 - .06); mb.obj(name + '_g', 'glass', 0, parent)
-    mb = MB(); mb.box(x0, x1, y - .07, y + .07, z0, z0 + .07); mb.box(x0, x1, y - .07, y + .07, z1 - .07, z1)
-    for i in range(panes + 1):
-        xx = x0 + (x1 - x0) * i / panes; mb.box(xx - .035, xx + .035, y - .07, y + .07, z0, z1)
-    mb.obj(name + '_f', 'alu', .004, parent)
+    """Corredera de aluminio: marco con cabecero, jambas y carril doble enrasado en el suelo; hojas alternas en los dos
+    carriles que se solapan 7 cm en los encuentros (montantes de encuentro más anchos), vidrio doble y tiradores."""
+    fr, gl, rl, hd = MB(), MB(), MB(), MB()
+    D = .075
+    fr.box(x0 - .045, x1 + .045, y - D, y + D, z1 - .065, z1)                                     # cabecero
+    fr.box(x0 - .045, x0 + .01, y - D, y + D, z0, z1); fr.box(x1 - .01, x1 + .045, y - D, y + D, z0, z1)   # jambas
+    fr.box(x0, x1, y - D, y + D, z0, z0 + .012)                                                   # bandeja del carril
+    for yy in (y - .035, y + .035): rl.box(x0, x1, yy - .003, yy + .003, z0 + .012, z0 + .028)   # raíles de acero
+    w = (x1 - x0) / panes; ov = .035
+    for i in range(panes):
+        a = x0 + i * w - (ov if i else 0); b_ = x0 + (i + 1) * w + (ov if i < panes - 1 else 0)
+        yi = y - .035 if i % 2 == 0 else y + .035          # hojas pares en el carril exterior, impares en el interior
+        za, zb = z0 + .028, z1 - .07
+        sl = .085 if i else .055; sr = .085 if i < panes - 1 else .055
+        fr.box(a, b_, yi - .024, yi + .024, za, za + .085); fr.box(a, b_, yi - .024, yi + .024, zb - .06, zb)
+        fr.box(a, a + sl, yi - .024, yi + .024, za, zb); fr.box(b_ - sr, b_, yi - .024, yi + .024, za, zb)
+        gl.box(a + sl - .012, b_ - sr + .012, yi - .012, yi + .012, za + .07, zb - .045)
+        # tirador vertical (asa de 45 cm separada 4 cm) en el montante libre de cada hoja, por fuera y por dentro
+        hx = (a + sl * .5) if i % 2 == 0 else (b_ - sr * .5)
+        for sg in (-1, 1):
+            f_ = yi + sg * .024; o_ = f_ + sg * .045
+            hd.box(hx - .009, hx + .009, min(o_, o_ - sg * .018), max(o_, o_ - sg * .018), z0 + .85, z0 + 1.35)
+            for zz in (z0 + .88, z0 + 1.32): hd.box(hx - .006, hx + .006, min(f_, o_), max(f_, o_), zz - .006, zz + .006)
+    fr.obj(name + '_f', 'alu', .003, parent); gl.obj(name + '_g', 'glass', 0, parent)
+    rl.obj(name + '_r', 'steel', 0, parent); soft(hd.obj(name + '_h', 'steel', 0, parent), .003, 1)
 glazing('gglass', -6.4, 4.0, 1.2, .3, 3.6, 4, G_WALLS)
 mb = MB()   # marco de aluminio negro de 5 cm con travesaño (fijo abajo, practicable arriba)
 mb.box(SX0, SX1, SGY - .03, SGY + .03, SZ0, SZ0 + .05); mb.box(SX0, SX1, SGY - .03, SGY + .03, SZ1 - .05, SZ1)
@@ -624,7 +733,7 @@ mb.obj('uwalls', 'render', .015, G_UPPER)
 glazing('uglass', -9.68, -.6, 1.6, 4.02, 7.0, 4, G_UPPER)
 mb = MB(); mb.box(-9.68, -.6, -2.0, -1.97, 4.08, 5.05); mb.obj('rail_g', 'glass', 0, G_UPPER)
 mb = MB(); mb.box(-9.68, -.6, -2.05, -1.92, 4.02, 4.1); mb.obj('rail_base', 'steel', .003, G_UPPER)
-mb = MB(); mb.box(-9.68, -.6, -1.97, 1.6, 4.02, 4.05); mb.obj('uterrace', 'tile', 0, G_UPPER)
+mb = MB(); mb.box(-9.68, -.6, -1.97, 1.6, 4.02, 4.05); mb.obj('uterrace', 'tile_ext', 0, G_UPPER)
 # ventanal: marco de aluminio negro de 6 cm con dos montantes, vidrio y vierteaguas
 GY = -2.1 + WT * .42
 mb = MB()
@@ -872,7 +981,7 @@ def water_sheet(name, mat, x0, x1, y0, y1, z, step, keep=None):
 pool_ob = mb.obj('pool', 'pooltile', 0, recalc=False); planar_uv(pool_ob); pool_ob.cycles.is_caustics_receiver = True
 water_sheet('water', 'water', PX0 - .03, PX1 + .03, PY0 - .03, PY1 + .03, -.07, .015)
 mb = MB(); mb.box(-3.4, 9.4, -9.2, -8.8, 0, .07); mb.box(-3.4, 9.4, -4.4, -4.0, 0, .07); mb.box(-3.4, -3.0, -8.8, -4.4, 0, .07); mb.box(9.0, 9.4, -8.8, -4.4, 0, .07)
-mb.obj('coping', 'tile', .012)
+mb.obj('coping', 'coping', .012)
 mb = MB()
 for i in range(6): mb.cbox(-2 + i * 2, -4.42, -.45, .13, .01, .13)
 mb.obj('leds', 'led', 0)
@@ -952,7 +1061,7 @@ for i in range(n_):
     j = (i + 1) % n_
     mb.bm.faces.new((ro[i], ro[j], ro[n_ + j], ro[n_ + i])); mb.bm.faces.new((ri[n_ + i], ri[n_ + j], ri[j], ri[i]))
     mb.bm.faces.new((ro[n_ + i], ro[n_ + j], ri[n_ + j], ri[n_ + i])); mb.bm.faces.new((ri[i], ri[j], ro[j], ro[i]))
-soft(mb.obj('spacoping', 'tile', 0), .02, 3)
+soft(mb.obj('spacoping', 'coping', 0), .02, 3)
 # Tumbonas, sombrilla
 simple('whitemetal', 0xe6e6e2, .3, .7)
 for i, x in enumerate((1.0, 2.3, 3.6)):
@@ -1052,12 +1161,12 @@ pole.obj('lampposts', 'lampmetal', .006, smooth=True); head.obj('lampheads', 'la
 # ------------------------------------------------------------------ luces, cielo, cámara
 SUN_EL, SUN_AZ = 33, 145   # sun_rotation: 0=+Y, 90=+X -> sol delante-derecha
 if HAVE_PH:
-    # kloofendal_38d_partly_cloudy_puresky: sol a 37,9° de altura y azimut -35,9° (atan2) en la imagen;
-    # se gira el cielo para dejarlo donde estaba el sol de la escena (azimut 145°, delante a la derecha)
-    SUN_EL = 37.9; K_SKY = 1.75
+    # kloofendal_48d_partly_cloudy_puresky (cielo azul con cúmulos): sol a 47,9° de altura y azimut -34,2° (atan2)
+    # en la imagen; se gira el cielo para dejarlo donde estaba el sol de la escena (azimut 145°, delante a la derecha)
+    SUN_EL = 47.9; K_SKY = 1.75
     w = bpy.data.worlds.new('sky'); sc.world = w; w.use_nodes = True; nt = w.node_tree
-    tcw = nt.nodes.new('ShaderNodeTexCoord'); mpw = nt.nodes.new('ShaderNodeMapping'); mpw.inputs['Rotation'].default_value = (0, 0, math.radians(19.1))
-    env = nt.nodes.new('ShaderNodeTexEnvironment'); env.image = bpy.data.images.load(PH + 'sky.hdr')
+    tcw = nt.nodes.new('ShaderNodeTexCoord'); mpw = nt.nodes.new('ShaderNodeMapping'); mpw.inputs['Rotation'].default_value = (0, 0, math.radians(20.76))
+    env = nt.nodes.new('ShaderNodeTexEnvironment'); env.image = bpy.data.images.load(PH + SKY)
     nt.links.new(tcw.outputs['Generated'], mpw.inputs['Vector']); nt.links.new(mpw.outputs[0], env.inputs['Vector'])
     dk = nt.nodes.new('ShaderNodeMixRGB'); dk.blend_type = 'DARKEN'; dk.inputs['Fac'].default_value = 1; dk.inputs['Color2'].default_value = (50, 50, 50, 1)
     nt.links.new(env.outputs[0], dk.inputs['Color1'])
@@ -1083,7 +1192,8 @@ else:
     skymix = nt.nodes.new('ShaderNodeMixRGB'); nt.links.new(cm2.outputs[0], skymix.inputs['Fac']); nt.links.new(sky.outputs[0], skymix.inputs['Color1']); nt.links.new(ccol.outputs[0], skymix.inputs['Color2'])
     nt.links.new(skymix.outputs[0], bg.inputs[0])
 sun_d = bpy.data.lights.new('sun', 'SUN'); sun_d.energy = 4.2; sun_d.angle = math.radians(.8); sun_d.color = (1.0, .95, .88)
-if HAVE_PH: sun_d.energy = 2.4 * K_SKY; sun_d.angle = math.radians(.6); sun_d.color = (1.0, .957, .873)   # irradiancia y color medidos del sol del HDRI
+# irradiancia medida del sol del HDRI (3,9 frente a 2,1 del cielo anterior); color algo más cálido que el medido (1, 1,02, ,92)
+if HAVE_PH: sun_d.energy = 4.46 * K_SKY; sun_d.angle = math.radians(.6); sun_d.color = (1.0, .945, .85)
 sun_d.cycles.is_caustics_light = True
 sun = bpy.data.objects.new('sun', sun_d); COL.objects.link(sun)
 # dirección de la luz coherente con el cielo: rotación Z = azimut, X = 90-elevación

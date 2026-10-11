@@ -243,19 +243,34 @@ def cypress_tree(bark, lv, inner, hgt):
         spray(lv, p, d, (out + vdir() * .4).normalized(), vr(.04, .065), VR.random())
 
 # --- seto recortado (tramo de 1 m) y bola de pitosporo
-def hedge_segment(lv, inner, length, h, d):
+def hedge_segment(lv, inner, length, h, d, rough=0., holes=0, dens=1.):
+    """Tramo de seto. rough: abombamientos y borde superior irregular (m); holes: huecos donde se ve el interior;
+    dens: densidad de hojas. Con rough=0 es el seto recortado perfecto de antes."""
     tube(inner, [Vector((0, 0, .05)), Vector((0, 0, h - .1))], [d * .32, d * .32], 4)
+    for _ in range(int(rough * 40)):   # ramitas sueltas por dentro (se ven en los huecos)
+        p0 = Vector((vr(-length / 2, length / 2), vr(-d * .2, d * .2), vr(.2, h - .2)))
+        tube(inner, [p0, p0 + Vector((0, VR.choice((-1, 1)) * d * vr(.3, .45), vr(-.1, .15)))], [.012, .006], 4)
+    ph = [vr(0, 6.28) for _ in range(6)]
+    def bulge(x, z):   # abombamiento suave de la cara (no es un plano recortado a cuchilla)
+        return rough * (math.sin(x * 3.1 + ph[0]) * math.sin(z * 2.3 + ph[1]) * .6 + math.sin(x * 7.7 + z * 5.1 + ph[2]) * .4)
+    def top(x):
+        return h + rough * (.6 * math.sin(x * 2.7 + ph[3]) + .4 * math.sin(x * 6.9 + ph[4]))
+    hl = [(vr(-length / 2, length / 2), vr(.25, h - .2), vr(.12, .3), VR.choice((-1, 1))) for _ in range(holes)]
+    def in_hole(x, z, sgn):
+        return any(sg == sgn and (x - hx) ** 2 + ((z - hz) * .8) ** 2 < hr * hr for hx, hz, hr, sg in hl)
     area = 2 * length * h + length * d
-    n = int(area * 2600)
+    n = int(area * 2600 * dens)
     for _ in range(n):
         side = VR.random() * area
         if side < length * h * 2:
             sgn = 1 if side < length * h else -1
             x = vr(-length / 2, length / 2); z = vr(.04, h - .02) ** 1.0
-            y = sgn * (d / 2) * vr(.86, 1.04) * (1 - .1 * (1 - z / h))
+            if z > top(x) - .02: continue
+            y = sgn * ((d / 2) * vr(.86, 1.04) * (1 - .1 * (1 - z / h)) + bulge(x, z))
+            if in_hole(x, z, sgn): y *= vr(.35, .6)   # hueco: hojas más adentro y más claras de cantidad
             out = Vector((0, sgn, 0))
         else:
-            x = vr(-length / 2, length / 2); y = vr(-d / 2, d / 2) * .95; z = h * vr(.96, 1.02); out = Vector((0, 0, 1))
+            x = vr(-length / 2, length / 2); y = vr(-d / 2, d / 2) * .95; z = top(x) * vr(.96, 1.02); out = Vector((0, 0, 1))
         p = Vector((x, y, z)); ld = (vdir() + out * .6).normalized()
         leaf6(lv, p, ld, (out + vdir() * .7).normalized(), vr(.03, .045), vr(.014, .02), VR.random(), .2)
 
@@ -307,8 +322,8 @@ def pine_parts(h):
 def cypress_parts(h):
     bark, lv, inner = Geo(), Geo(), Geo(); cypress_tree(bark, lv, inner, h)
     return [(bark, 'cypress_bark', True), (lv, 'cypress_leaf', False), (inner, 'innerdark', True)]
-def hedge_parts(h, d):
-    lv, inner = Geo(), Geo(); hedge_segment(lv, inner, 1.02, h, d); return [(lv, 'hedge_leaf', False), (inner, 'innerdark', False)]
+def hedge_parts(h, d, rough=0., holes=0, dens=1.):
+    lv, inner = Geo(), Geo(); hedge_segment(lv, inner, 1.02, h, d, rough, holes, dens); return [(lv, 'hedge_leaf', False), (inner, 'innerdark', False)]
 def ball_parts(r):
     lv, inner = Geo(), Geo(); ball_shrub(lv, inner, r); return [(lv, 'box_leaf', False), (inner, 'innerdark', True)]
 def lav_parts(r):
@@ -319,7 +334,9 @@ for nm, fn in (('oliveA', lambda: olive_parts(5.2)), ('oliveB', lambda: olive_pa
                ('oakA', lambda: oak_parts(9.5)), ('oakB', lambda: oak_parts(8.0)), ('oakC', lambda: oak_parts(10.5)),
                ('pineA', lambda: pine_parts(13.5)), ('pineB', lambda: pine_parts(11.5)), ('pineC', lambda: pine_parts(15.0)),
                ('cypressA', lambda: cypress_parts(10.5)), ('cypressB', lambda: cypress_parts(8.5)),
-               ('hedgeT', lambda: hedge_parts(1.95, .75)), ('hedgeL', lambda: hedge_parts(1.0, .6)),
+               ('hedgeT', lambda: hedge_parts(1.95, .75, .035, 0)), ('hedgeT2', lambda: hedge_parts(1.95, .75, .05, 2, .85)),
+               ('hedgeT3', lambda: hedge_parts(1.95, .75, .045, 1, 1.1)), ('hedgeT4', lambda: hedge_parts(1.95, .75, .06, 3, .7)),
+               ('hedgeL', lambda: hedge_parts(1.0, .6, .03, 0)), ('hedgeL2', lambda: hedge_parts(1.0, .6, .045, 1, .8)),
                ('ballA', lambda: ball_parts(.55)), ('ballB', lambda: ball_parts(.4)), ('lavA', lambda: lav_parts(.38))):
     if VEG_ONLY and nm not in VEG_ONLY.split(','): continue
     make_proto(nm, fn)
@@ -334,15 +351,21 @@ def place(kind, x, y, s=1.0, rot=None, sz=None, name=None):
 if not VEG_ONLY:
     # ---------------- jardín
     # setos altos en los laterales y el fondo; seto bajo delante (deja libre la puerta)
+    # setos irregulares: cada tramo de 1 m es una de varias variantes (abombamientos, huecos, más o menos tupido),
+    # con altura, grosor, giro y posición algo distintos; el giro de 180° alterna la cara que se ve
+    def hedge(kinds, wts, x, y, rot):
+        k = VR.choices(kinds, wts)[0]; e = place(k, x + vr(-.03, .03), y + vr(-.04, .04), 1, rot=rot + VR.choice((0, math.pi)) + vr(-.03, .03))
+        if e: e.scale = (1, vr(.94, 1.07), vr(.95, 1.05))
+    HT, HW = ['hedgeT', 'hedgeT2', 'hedgeT3', 'hedgeT4'], [4, 2, 3, 1]
     x = -15.0
     while x <= 17.0:
-        place('hedgeT', x, 12.75, 1, rot=0, sz=1); x += 1.0
+        hedge(HT, HW, x, 12.75, 0); x += 1.0
     y = -12.4
     while y <= 12.2:
-        place('hedgeT', -15.3, y, 1, rot=math.pi / 2, sz=1); place('hedgeT', 17.3, y, 1, rot=math.pi / 2, sz=1); y += 1.0
+        hedge(HT, HW, -15.3, y, math.pi / 2); hedge(HT, HW, 17.3, y, math.pi / 2); y += 1.0
     x = -15.0
     while x <= 17.0:
-        if not (-2.3 < x < 4.3): place('hedgeL', x, -12.95, 1, rot=0, sz=1)
+        if not (-2.3 < x < 4.3): hedge(['hedgeL', 'hedgeL2'], [3, 2], x, -12.95, 0)
         x += 1.0
     # cipreses en hilera delante del seto del fondo y flanqueando la entrada
     x = -12.6
@@ -433,50 +456,125 @@ if not VEG_ONLY:
     if e: e.location.z = 4.3; e.parent = G_UPPER
 
     # ---------------- bosque frondoso alrededor de la parcela (encinas, pinos piñoneros, cipreses y matorral)
+    # Densidad irregular (bosquetes cerrados y zonas más abiertas), claros de pradera seca, caminos de tierra
+    # y árboles de tamaños e inclinaciones distintos. El suelo se pinta en el mapa 'groundmap' del material 'land'.
+    import numpy as np
     def zone(x, y):
         if -18.5 < x < 20.5 and -13.8 < y < 16.5: return None        # parcela
         if -22.6 < y < -13.3: return None                             # carretera y aceras
         if -62 < x < 46 and -85 < y < -22.6: return 'claro'           # delante de la carretera: solo matorral (la cámara pasa por aquí)
         return 'bosque'
-    groves = [(vr(-350, 350), vr(-350, 350), vr(25, 60)) for _ in range(40)]
-    def pine_density(x, y):
-        return max(math.exp(-((x - gx) ** 2 + (y - gy) ** 2) / (2 * gr * gr)) for gx, gy, gr in groves)
-    # muestreo de disco de Poisson sobre una rejilla: árboles juntos, con las copas tocándose
+    _vn = {}
+    def vnoise(x, y, sc, seed):
+        """Ruido de valor suave (0-1)."""
+        x, y = x / sc, y / sc; ix, iy = math.floor(x), math.floor(y); fx, fy = x - ix, y - iy
+        def h(i, j):
+            k = (i, j, seed)
+            if k not in _vn: _vn[k] = random.Random(hash(k) & 0xffffffff).random()
+            return _vn[k]
+        sx, sy = fx * fx * (3 - 2 * fx), fy * fy * (3 - 2 * fy)
+        a = h(ix, iy) + (h(ix + 1, iy) - h(ix, iy)) * sx; b = h(ix, iy + 1) + (h(ix + 1, iy + 1) - h(ix, iy + 1)) * sx
+        return a + (b - a) * sy
+    def openness(x, y):   # 0 = bosque cerrado, 1 = muy abierto
+        return .65 * vnoise(x, y, 42, 1) + .35 * vnoise(x, y, 15, 2)
+    MEADOWS = [(-52, 38, 15), (44, 74, 19), (-22, 98, 13), (74, 14, 16), (-88, 82, 21), (16, 140, 18), (-120, 20, 17)]
+    def meadow(x, y):
+        best = 0.
+        for cx, cy, r in MEADOWS:
+            rr_ = r * (1 + .3 * (vnoise(x, y, 9, 3) - .5)); d = math.hypot(x - cx, y - cy)
+            best = max(best, min(1., max(0., (rr_ - d) / 4.)))
+        return best
+    PATHS = [[(-35, -13.3), (-34, -2), (-30, 14), (-27, 26), (-30, 42), (-37, 58), (-35, 80), (-26, 104), (-21, 138), (-24, 180)],
+             [(-27, 26), (-12, 31), (6, 29), (24, 33), (40, 44), (56, 51), (74, 50), (98, 58), (130, 60)],
+             [(44, 74), (52, 96), (48, 122), (58, 150)]]
+    def densify(pl, step=1.5):
+        P = [Vector((x, y, 0)) for x, y in pl]
+        for _ in range(3):   # Chaikin: curvas suaves
+            Q = [P[0]]
+            for a, b in zip(P[:-1], P[1:]): Q += [a * .75 + b * .25, a * .25 + b * .75]
+            P = Q + [P[-1]]
+        out = [P[0]]
+        for a, b in zip(P[:-1], P[1:]):
+            n = max(1, int((b - a).length / step))
+            out += [a.lerp(b, k / n) for k in range(1, n + 1)]
+        return [(p.x, p.y) for p in out]
+    PATHPTS = [densify(p) for p in PATHS]
+    PSEG = np.array([(a[0], a[1], b[0], b[1]) for pl in PATHPTS for a, b in zip(pl[:-1], pl[1:])])
+    def path_dist(x, y):
+        ax, ay, bx, by = PSEG.T; dx, dy = bx - ax, by - ay
+        t = np.clip(((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy + 1e-9), 0, 1)
+        return float(np.min(np.hypot(ax + t * dx - x, ay + t * dy - y)))
+    # muestreo de disco de Poisson con radio variable: copas que se tocan en los bosquetes, más separadas en lo abierto
     cell = 4.0; grid = {}; pts = []
     def free(x, y, r):
         gx, gy = int(x // cell), int(y // cell)
-        for i in range(gx - 3, gx + 4):
-            for j in range(gy - 3, gy + 4):
+        for i in range(gx - 4, gx + 5):
+            for j in range(gy - 4, gy + 5):
                 for (px, py, pr) in grid.get((i, j), ()):
                     if (px - x) ** 2 + (py - y) ** 2 < (r + pr) ** 2 * .25: return False
         return True
     tries = 0
-    while tries < 260000 and len(pts) < 11000:
+    while tries < 300000 and len(pts) < 11000:
         tries += 1
         d = math.sqrt(VR.random()) * 300; a = vr(0, 2 * math.pi); x, y = math.cos(a) * d * 1.1, math.sin(a) * d
         z_ = zone(x, y)
         if z_ != 'bosque': continue
-        r = vr(3.6, 4.8) * (1 + max(0, d - 140) / 220)          # copas que se tocan; más espaciado a lo lejos
+        mw = meadow(x, y)
+        if mw > .05 and VR.random() < mw * .97: continue                # claros (algún árbol suelto)
+        if path_dist(x, y) < 3.2: continue                              # caminos
+        op = openness(x, y)
+        r = vr(3.4, 4.6) * (.8 + 1.1 * op * op) * (1 + max(0, d - 140) / 220)
         if not free(x, y, r): continue
         grid.setdefault((int(x // cell), int(y // cell)), []).append((x, y, r)); pts.append((x, y))
-        u = VR.random(); pd = pine_density(x, y)
-        if u < .08 + .3 * pd: kind = VR.choice(['pineA', 'pineB', 'pineC']); s = vr(.8, 1.15)
-        elif u < .95: kind = VR.choice(['oakA', 'oakB', 'oakC']); s = vr(.8, 1.2)
-        elif u < .97: kind = VR.choice(['cypressA', 'cypressB']); s = vr(.9, 1.15)
-        else: kind = VR.choice(['oliveA', 'oliveC']); s = vr(.9, 1.1)
-        place(kind, x, y, s)
+        u = VR.random(); pd = vnoise(x, y, 60, 4)
+        if u < .06 + .32 * pd * pd: kind = VR.choice(['pineA', 'pineB', 'pineC']); s = vr(.7, 1.25)
+        elif u < .94: kind = VR.choice(['oakA', 'oakB', 'oakC']); s = vr(.62, 1.32)
+        elif u < .97: kind = VR.choice(['cypressA', 'cypressB']); s = vr(.8, 1.2)
+        else: kind = VR.choice(['oliveA', 'oliveC']); s = vr(.8, 1.15)
+        e = place(kind, x, y, s, sz=vr(.85, 1.15))
+        if e: e.rotation_euler.x = vr(-.06, .06); e.rotation_euler.y = vr(-.06, .06)
     print('bosque:', len(pts), 'árboles', flush=True)
-    # sotobosque y matorral (más denso en el claro delante de la carretera)
+    # sotobosque y matorral (más denso en el claro delante de la carretera; poco en las praderas; nada en los caminos)
     cnt = 0; tries = 0
-    while cnt < 9000 and tries < 120000:
+    while cnt < 9000 and tries < 140000:
         tries += 1
         d = 21 + math.sqrt(VR.random()) * 240; a = vr(0, 2 * math.pi); x, y = math.cos(a) * d * 1.1, math.sin(a) * d
         z_ = zone(x, y)
         if z_ is None or (z_ == 'claro' and VR.random() > .8): continue
+        mw = meadow(x, y)
+        if mw > .5 and VR.random() < .85: continue
+        if path_dist(x, y) < 1.8: continue
         e = place('ballA' if VR.random() < .5 else 'ballB', x, y, 1)
-        if e: s_ = vr(1.8, 3.6) if z_ == 'bosque' else vr(.9, 1.8); e.scale = (s_ * vr(.8, 1.4), s_ * vr(.8, 1.4), s_ * vr(.6, 1.1))
+        if e:
+            s_ = (vr(1.8, 3.6) if z_ == 'bosque' else vr(.9, 1.8)) * (1 - .55 * mw)
+            e.scale = (s_ * vr(.8, 1.4), s_ * vr(.8, 1.4), s_ * vr(.6, 1.1))
         cnt += 1
-    # algunos olivos y encinas jóvenes sueltos en el claro, lejos del recorrido de la cámara
+    # algunos olivos y encinas jóvenes sueltos en el claro y en las praderas
     for _ in range(40):
         x, y = vr(-60, 44), vr(-84, -60)
         if zone(x, y) == 'claro': place(VR.choice(['oliveA', 'oliveB', 'oakB']), x, y, vr(.5, .8))
+    for cx, cy, r in MEADOWS:
+        for _ in range(3):
+            a = vr(0, 6.28); dd = r * vr(.2, .7); place(VR.choice(['oliveA', 'oakB', 'oliveC']), cx + math.cos(a) * dd, cy + math.sin(a) * dd, vr(.6, 1.0))
+    # mapa del suelo: caminos (R), praderas (G) y sombra de copas / hojarasca (B)
+    if 'groundmap' in bpy.data.images:
+        N_ = 1024; gm_ = 640.; px_ = (np.arange(N_) + .5) / N_ * gm_ - gm_ / 2
+        X_, Y_ = np.meshgrid(px_, px_)
+        Rc = np.zeros((N_, N_)); Gc = np.zeros((N_, N_)); Bc = np.zeros((N_, N_))
+        for ax, ay, bx, by in PSEG:
+            x0, x1, y0, y1 = min(ax, bx) - 4, max(ax, bx) + 4, min(ay, by) - 4, max(ay, by) + 4
+            i0, i1 = np.searchsorted(px_, [y0, y1]); j0, j1 = np.searchsorted(px_, [x0, x1])
+            if i1 <= i0 or j1 <= j0: continue
+            xs, ys = X_[i0:i1, j0:j1], Y_[i0:i1, j0:j1]; dx, dy = bx - ax, by - ay
+            t = np.clip(((xs - ax) * dx + (ys - ay) * dy) / (dx * dx + dy * dy + 1e-9), 0, 1)
+            dd = np.hypot(ax + t * dx - xs, ay + t * dy - ys)
+            Rc[i0:i1, j0:j1] = np.maximum(Rc[i0:i1, j0:j1], np.clip((1.25 - dd) / .5, 0, 1))
+        for cx, cy, r in MEADOWS:
+            dd = np.hypot(X_ - cx, Y_ - cy); Gc = np.maximum(Gc, np.clip((r * 1.1 - dd) / 6, 0, 1))
+        P_ = np.array(pts); H_, _, _ = np.histogram2d(P_[:, 1], P_[:, 0], bins=N_, range=[[-gm_ / 2, gm_ / 2]] * 2)
+        k = 7; ker = np.exp(-np.linspace(-2.5, 2.5, 2 * k + 1) ** 2); ker /= ker.sum()
+        Bc = np.apply_along_axis(lambda v_: np.convolve(v_, ker, 'same'), 0, H_); Bc = np.apply_along_axis(lambda v_: np.convolve(v_, ker, 'same'), 1, Bc)
+        Bc = np.clip(Bc / (np.percentile(Bc[Bc > 0], 90) + 1e-6), 0, 1)
+        Gc *= 1 - Rc; Bc *= (1 - Rc) * (1 - Gc)
+        img_ = np.stack([Rc, Gc, Bc, np.ones_like(Rc)], -1).astype(np.float32)
+        gi = bpy.data.images['groundmap']; gi.pixels.foreach_set(img_.ravel()); gi.pack()

@@ -269,3 +269,60 @@ simple('slotcanvas', 0xb9a58a, .9); mb = MB(); mb.box(4.6, 5.7, 3.57, 3.575, 1.2
 ld_ = bpy.data.lights.new('in5', 'AREA'); ld_.energy = 35; ld_.size = .9; ld_.color = (1, .82, .6)
 lo_ = bpy.data.objects.new('in5', ld_); lo_.location = (5.2, 2.5, 3.3); lo_.parent = G_BASE; COL.objects.link(lo_)
 lo_.visible_camera = False; lo_.visible_transmission = False; lo_.visible_glossy = False
+
+# ------------------------------------------------------------------ remate del césped
+# banda de grava blanca de 45-50 cm alrededor de la plataforma, pletina de acero entre césped y grava o tarima,
+# y testa de madera que cierra el canto de la tarima
+m, nt, b = newmat('gravelband'); M['gravelband'] = m
+if HAVE_PH: pbr(nt, b, 'gravel_floor_02', .9, tint=0xf1ece3, tint_fac=1., nstr=1.4, rough=(.6, .95), sat=.35, gain=1.6)
+else: b.inputs['Base Color'].default_value = lin(0xd8d2c6); b.inputs['Roughness'].default_value = .9
+mb = MB()
+for bx_ in ((-10.1, -9.6, -4.0, 7.65), (-9.6, 6.5, 7.2, 7.65), (6.5, 7.0, 1.0, 7.65), (7.0, 9.4, 1.0, 1.45), (8.9, 9.4, -4.0, 1.0)):
+    mb.box(bx_[0], bx_[1], bx_[2], bx_[3], -.01, .028)
+mb.obj('gravelband', 'gravelband', 0)
+simple('edgesteel', 0x2a2826, .55, .7)
+T_ = .003; mb = MB()
+for (x0_, x1_, y0_, y1_) in ((-10.1, -10.1, -4.0, 7.65), (-10.1, 7.0, 7.65, 7.65), (7.0, 7.0, 1.45, 7.65), (7.0, 9.4, 1.45, 1.45),
+                             (9.4, 9.4, -11.6, 1.45), (-10.1, -9.8, -4.0, -4.0), (-9.8, 9.4, -11.6, -11.6), (-9.8, -9.8, -11.6, -4.0)):
+    mb.box(x0_ - T_, x1_ + T_, y0_ - T_, y1_ + T_, -.06, .032)
+mb.obj('lawnedge', 'edgesteel', .001)
+mb = MB(); mb.box(-9.8, 9.42, -11.618, -11.6, .0, .084); mb.box(-9.818, -9.8, -11.618, -4.0, .0, .084); mb.box(9.4, 9.418, -11.618, -9.2, .0, .084)
+mb.obj('deckfascia', 'deckboard', .002)
+
+# ------------------------------------------------------------------ cubierta: sumideros, gárgolas, bajantes y canalón
+dz_, gg_, dp_, br_ = MB(), MB(), MB(), MB()
+for (dx_, dy_) in ((-9.55, 5.8), (5.15, 6.6)):   # sumideros sifónicos con cúpula de rejilla sobre una losa limpia
+    dz_.box(dx_ - .3, dx_ + .3, dy_ - .3, dy_ + .3, RZ - .02, RZ + .025)
+    lathe(gg_, dx_, dy_, RZ + .025, [(0, 0), (.13, 0), (.13, .012), (.11, .03), (.075, .07), (.035, .085), (0, .088)], 24)
+for xg_ in (-9.55, 5.15):   # gárgola por el peto trasero, caja colectora y bajante hasta la grava
+    dp_.box(xg_ - .06, xg_ + .06, 6.95, 7.42, RZ + .02, RZ + .1)
+    dp_.box(xg_ - .12, xg_ + .12, 7.22, 7.44, RZ - .55, RZ - .25)
+    dp_.box(xg_ - .045, xg_ + .045, 7.26, 7.35, .1, RZ - .55)
+    dp_.box(xg_ - .045, xg_ + .045, 7.26, 7.5, .02, .12)
+    for zb in (1.0, 2.6, 4.4, 6.0): br_.box(xg_ - .055, xg_ + .055, 7.2, 7.36, zb, zb + .035)
+# volumen bajo de la derecha: canalón de aluminio en el borde y bajante a la grava
+dp_.box(6.4, 6.53, 1.0, 7.2, 3.47, 3.6); dp_.box(6.43, 6.51, 6.9, 6.98, .1, 3.48); dp_.box(6.43, 6.62, 6.9, 6.98, .02, .12)
+for zb in (.9, 2.2): br_.box(6.4, 6.52, 6.89, 6.99, zb, zb + .03)
+dz_.obj('roofdrainpads', 'concrete', .004, G_ROOF); gg_.obj('roofdrains', 'black', 0, G_ROOF, smooth=True)
+dp_.obj('downpipes', 'copingmetal', .004); br_.obj('downpipebrackets', 'alu', .002)
+# canaleta de desagüe con rejilla de acero en la terraza de la planta alta, junto a la corredera
+simple('grate', 0x9a9c9e, .35, .9)
+mb = MB()
+for k in range(160): mb.box(-9.4 + k * .053, -9.4 + k * .053 + .035, 1.38, 1.48, 4.05, 4.056)
+mb.box(-9.42, -.9, 1.375, 1.38, 4.05, 4.058); mb.box(-9.42, -.9, 1.48, 1.485, 4.05, 4.058)
+mb.obj('terracedrain', 'grate', 0, G_UPPER)
+
+# ------------------------------------------------------------------ hojas secas caídas en la tarima y la terraza
+lf = MB(colors=True); LR_ = random.Random(404)
+# (color por vértice en bytes sRGB: se pasa sin linealizar, el nodo de atributo ya lo convierte)
+DRY = [tuple(((c >> s_) & 255) / 255 for s_ in (16, 8, 0)) + (1.,) for c in (0x8f7d55, 0x766c48, 0xa38a5c, 0x6b6646, 0x9a8e66, 0x5f5a3e)]
+for (x0_, x1_, y0_, y1_, z_, n_) in ((.4, 4.6, -11.5, -10.9, .081, 34), (1.2, 3.4, -11.55, -11.2, .081, 18), (-8.6, -4.2, -6.0, -4.3, .081, 16),
+                                     (-9.5, -8.0, -3.45, -2.85, .301, 12), (7.4, 8.85, -3.45, -2.8, .301, 10), (-6.7, -3.7, -3.3, -2.85, .301, 9),
+                                     (-9.7, -3.5, -11.55, -11.1, .081, 14)):
+    for _ in range(n_):
+        x_, y_ = LR_.uniform(x0_, x1_), LR_.uniform(y0_, y1_); a_ = LR_.uniform(0, 6.28); L2 = LR_.uniform(.045, .07); W2 = L2 * LR_.uniform(.17, .24)
+        c_ = LR_.choice(DRY); ca, sa = math.cos(a_), math.sin(a_); cu = LR_.uniform(.002, .006)
+        P_ = lambda u, v, h: (x_ + ca * u - sa * v, y_ + sa * u + ca * v, z_ + h)
+        lf.poly([P_(-L2 / 2, 0, .001), P_(0, -W2 / 2, cu), P_(0, 0, cu * .4)], c_); lf.poly([P_(-L2 / 2, 0, .001), P_(0, 0, cu * .4), P_(0, W2 / 2, cu)], c_)
+        lf.poly([P_(0, -W2 / 2, cu), P_(L2 / 2, 0, .002), P_(0, 0, cu * .4)], c_); lf.poly([P_(0, 0, cu * .4), P_(L2 / 2, 0, .002), P_(0, W2 / 2, cu)], c_)
+lf.obj('fallenleaves', 'leaf', 0, None, recalc=False)

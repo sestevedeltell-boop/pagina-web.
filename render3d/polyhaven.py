@@ -8,7 +8,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, 'ph')
 UA = {'User-Agent': 'unikal-villa-render/1.0'}
 
-HDRI = ('kloofendal_38d_partly_cloudy_puresky', '8k')
+HDRI = ('kloofendal_48d_partly_cloudy_puresky', '8k')   # cielo azul con cúmulos de buen tiempo, sol a 48°
 TEXTURES = {   # nombre -> resolución
     'oak_wood_planks': '2k',        # tarima
     'painted_plaster_wall': '2k',   # relieve del revoco blanco
@@ -62,7 +62,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     name, res = HDRI
     f = json.loads(get('https://api.polyhaven.com/files/' + name))
-    save(f['hdri'][res]['hdr']['url'], os.path.join(OUT, 'sky.hdr'))
+    save(f['hdri'][res]['hdr']['url'], os.path.join(OUT, 'sky_%s.hdr' % name))
     for name, res in TEXTURES.items():
         f = json.loads(get('https://api.polyhaven.com/files/' + name))
         for key, short in dict(MAPS, **EXTRA.get(name, {})).items():
