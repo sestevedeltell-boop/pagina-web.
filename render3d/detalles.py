@@ -214,10 +214,10 @@ def pot(name, x, y, z, r, h, mat='terracotta', plant=None, ps=1.0, par=None):
         if e: e.location.z = z + h * .9
     return o_
 pot('p_terr1', -9.12, -3.1, .3, .28, .55, 'terracotta', 'ballA', .48)
-pot('p_terr2', -8.52, -3.26, .3, .19, .36, 'terracotta', 'lavA', .5)
+pot('p_terr2', -8.52, -3.26, .3, .19, .36, 'terracotta', 'ballB', .32)
 pot('p_terr3', 8.42, -3.05, .3, .24, .62, 'potglaze', 'ballB', .5)
-pot('p_terr4', 7.88, -3.24, .3, .16, .3, 'terracotta', 'lavA', .42)
-pot('p_kherb', -6.06, -2.3, KZT + .04, .065, .12, 'terracotta', 'lavA', .2)
+pot('p_terr4', 7.88, -3.24, .3, .16, .3, 'terracotta', 'ballB', .28)
+pot('p_kherb', -6.06, -2.3, KZT + .04, .065, .12, 'terracotta', 'ballB', .14)
 
 # ------------------------------------------------------------------ tumbonas: toallas
 # perfil de la tumbona (y, z): respaldo inclinado, colchoneta y caída por los pies

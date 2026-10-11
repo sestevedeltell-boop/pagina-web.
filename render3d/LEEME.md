@@ -45,12 +45,15 @@ Estos scripts regeneran la escena y los fotogramas. Todo se ejecuta desde esta c
 Hecho: agua con cáusticas reales, vegetación mediterránea y bosque frondoso, cielo HDRI, carretera realista,
 tarima de tablas reales, fachada con revoco, ventanal con estudio, dormitorio y salón amueblados e iluminados,
 cubierta con placas solares, jacuzzi revestido y sombrilla de brezo con mástil de tronco.
+Además: cristales con capa reflectante (reflejan cielo y árboles), ventana vertical real en el volumen blanco
+con estancia detrás, lajas de piedra natural (Poly Haven), cocina exterior completa y objetos de uso
+(toallas, libro, vasos, jarra, limones, macetas).
 
 Ideas pendientes para más realismo (por orden de impacto):
-1. Cristales con más reflejo del cielo y los árboles.
-2. La ventana estrecha negra del volumen blanco de la derecha: convertirla en ventana real.
-3. Objetos de uso: toallas, libro, bandeja con vasos, macetas pequeñas.
-4. Piedra real (Poly Haven) en el volumen de piedra de la fachada.
-5. Cocina exterior con barbacoa, fregadero y puertas.
-6. Correderas con tiradores y carriles; algo de desgaste y suciedad; seto menos uniforme; remate del césped;
-   luz algo más soleada; bosque y carretera con más variedad; sumideros y bajantes en la cubierta.
+1. Correderas con tiradores, carriles y hojas que se solapan.
+2. Algo de desgaste y suciedad: terraza y albardilla de la piscina demasiado limpias, marcas de agua.
+3. Seto menos uniforme (huecos y zonas más o menos densas).
+4. Remate del césped contra la terraza (bordillo o pletina).
+5. Luz algo más soleada y cálida, con más contraste.
+6. Bosque con más variedad (claros, caminos), coches y señales en la carretera, más detalle en los montes,
+   sumideros y bajantes en la cubierta.
