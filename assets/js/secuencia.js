@@ -1,8 +1,10 @@
 /* UNIKAL · Secuencia renderizada (Blender/Cycles) que avanza con el scroll.
    assets/seq/manifest.json: { n, ch, have, d:[[off,len]|null…], m:[…], p:[…], anchors:{ "i": { clave:[x,y,visible] } } }
-   Los fotogramas van empaquetados en bloques (d/cNN.webp a 1080p, m/cNN.webp para móvil) y en una vista previa
-   ligera de toda la secuencia (p.webp). Los bloques se descargan por prioridad alrededor de la posición del scroll
-   y solo se mantienen decodificados los fotogramas cercanos, para no agotar la memoria del móvil. */
+   Los fotogramas van empaquetados en bloques (d/cNN.webp a 1080p, m/cNN.webp a 960×540) y en una vista previa
+   ligera de toda la secuencia (p.webp, 480×270). Los bloques se descargan por prioridad alrededor de la posición del
+   scroll y solo se mantienen decodificados los fotogramas cercanos, para no agotar la memoria del móvil.
+   Calidad progresiva: justo por delante del scroll se baja primero el bloque de 960×540 (pesa ~3 veces menos) y
+   después el de 1080p, que lo sustituye en cuanto llega. Así casi nunca se ve la vista previa borrosa. */
 (function () {
   const canvas = document.getElementById('scene');
   if (!canvas) return;
@@ -41,14 +43,17 @@
   const conn = navigator.connection || {};
   const lite = small && location.hash !== '#hd' && !!(conn.saveData || (navigator.deviceMemory || 8) < 4);
   const TIER = lite ? 'm' : 'd';
+  const MID = lite ? null : 'm';   // calidad intermedia mientras llega la 1080p
   const HI_MAX = lite ? 30 : small ? 12 : 18;   // fotogramas nítidos decodificados a la vez (cada Full HD ocupa ~8 MB)
+  const MID_MAX = 24;               // fotogramas intermedios decodificados a la vez
   const LO_MAX = 60;                // fotogramas de vista previa decodificados a la vez
-  const PAR_DECODE = 3, PAR_FETCH = 2;
+  const PAR_DECODE = 4, PAR_FETCH = 3;
 
   let man = null, N = 1, CH = 12, anchors = {};
   let W = 1, H = 1, dpr = 1, target = 0, p = 0, drawnP = -1, dirIdx = 1, visible = true, dirty = true, geo = null, shown = false;
-  const hiBlob = [], loBlob = [], hiBmp = new Map(), loBmp = new Map(), pend = new Set(), chunkState = [];
-  let decoding = 0, fetching = 0;
+  const hiBlob = [], midBlob = [], loBlob = [], hiBmp = new Map(), midBmp = new Map(), loBmp = new Map(), pend = new Set();
+  const chunkState = { d: [], m: [] };
+  let decoding = 0, fetching = 0, previewAsked = false, lastSharp = 0;
 
   const toBitmap = window.createImageBitmap
     ? (b) => createImageBitmap(b)
@@ -56,7 +61,7 @@
 
   function resize() {
     W = canvas.clientWidth; H = canvas.clientHeight; dpr = Math.min(devicePixelRatio || 1, lite ? 1.5 : small ? 3 : 2);
-    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); lastSharp = 0;   // el lienzo se ha vaciado
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`); dirty = true;
   }
   // Encaje de la imagen 16:9: "cover" en pantallas apaisadas; en vertical, franja ancha con fondo difuminado (CSS)
@@ -81,18 +86,24 @@
       const b = map.get(k); map.delete(k); if (b && b.close) b.close();
     }
   }
+  const KINDS = { h: [hiBmp, hiBlob, HI_MAX], k: [midBmp, midBlob, MID_MAX], l: [loBmp, loBlob, LO_MAX] };
   function decode(kind, i) {
-    const map = kind === 'h' ? hiBmp : loBmp, src = kind === 'h' ? hiBlob : loBlob, key = kind + i;
+    const [map, src, max] = KINDS[kind], key = kind + i;
     if (i < 0 || i >= N || map.has(i) || pend.has(key) || !src[i] || decoding >= PAR_DECODE) return;
     pend.add(key); decoding++;
     toBitmap(src[i]).then((bm) => {
-      map.set(i, bm); trim(map, kind === 'h' ? HI_MAX : LO_MAX, Math.round(p * (N - 1))); dirty = true;
+      map.set(i, bm); trim(map, max, Math.round(p * (N - 1))); dirty = true;
     }).catch(() => {}).finally(() => { pend.delete(key); decoding--; });
   }
   function schedule() {
     const i = Math.round(p * (N - 1)), d = dirIdx;
     for (const o of [0, d, 2 * d, -d, 3 * d, 4 * d, -2 * d, 5 * d, 6 * d]) if (!hiBmp.has(i + o)) decode('h', i + o);
-    for (const o of [0, d, -d, 2 * d, 3 * d]) if (!hiBmp.has(i + o) && !loBmp.has(i + o)) decode('l', i + o);
+    if (MID) for (const o of [0, d, -d, 2 * d, 3 * d, 4 * d]) if (!hiBmp.has(i + o) && !midBmp.has(i + o)) decode('k', i + o);
+    for (const o of [0, d, -d, 2 * d, 3 * d]) if (!hiBmp.has(i + o) && !midBmp.has(i + o) && !loBmp.has(i + o)) decode('l', i + o);
+  }
+  function nearestSharp(i, maxd) {
+    for (let k = 0; k <= maxd; k++) for (const x of [i - k, i + k]) if (hiBmp.has(x) || midBmp.has(x)) return x;
+    return -1;
   }
   function nearest(map, i, maxd) {
     for (let k = 0; k <= maxd; k++) { if (map.has(i - k)) return i - k; if (map.has(i + k)) return i + k; }
@@ -100,36 +111,45 @@
   }
 
   /* ---------- Descarga por bloques, priorizando lo que viene por delante ---------- */
-  function chunkHasFrames(c) {
-    for (let i = c * CH; i < Math.min(N, (c + 1) * CH); i++) if (man[TIER][i]) return true;
+  function chunkHasFrames(tier, c) {
+    for (let i = c * CH; i < Math.min(N, (c + 1) * CH); i++) if (man[tier] && man[tier][i]) return true;
     return false;
   }
-  function fetchChunk(c) {
-    chunkState[c] = 1; fetching++;
-    fetch(`assets/seq/${TIER}/c${String(c).padStart(2, '0')}.webp`)
+  function fetchChunk(tier, c) {
+    const st = chunkState[tier], dst = tier === TIER ? hiBlob : midBlob;
+    st[c] = 1; fetching++;
+    fetch(`assets/seq/${tier}/c${String(c).padStart(2, '0')}.webp`)
       .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
       .then((buf) => {
         for (let i = c * CH; i < Math.min(N, (c + 1) * CH); i++) {
-          const e = man[TIER][i]; if (e) hiBlob[i] = new Blob([new Uint8Array(buf, e[0], e[1])], { type: 'image/webp' });
+          const e = man[tier][i]; if (e) dst[i] = new Blob([new Uint8Array(buf, e[0], e[1])], { type: 'image/webp' });
         }
-        chunkState[c] = 2; dirty = true;
+        st[c] = 2; dirty = true;
+        if (!previewAsked) { previewAsked = true; loadPreview(); }   // la vista previa, después del primer bloque bueno
       })
-      .catch(() => { chunkState[c] = 3; })
+      .catch(() => { st[c] = 3; })
       .finally(() => { fetching--; pumpChunks(); });
   }
+  // Puntuación (menor = antes): distancia al bloque actual (lo de detrás cuenta 1,6 veces más). La 1080p lleva un
+  // recargo de 3 bloques: con poco ancho de banda se cubre antes todo lo que viene por delante con la intermedia
+  // (pesa casi 3 veces menos) y la 1080p la va sustituyendo. La intermedia nunca se pide si su 1080p ya está bajada o bajándose.
   function pumpChunks() {
     if (!man) return;
     const nc = Math.ceil(N / CH), c0 = Math.floor(Math.round(target * (N - 1)) / CH);
     while (fetching < PAR_FETCH) {
-      let best = -1, bestScore = Infinity;
+      let best = null, bestScore = Infinity;
       for (let c = 0; c < nc; c++) {
-        if (chunkState[c]) continue;
-        if (!chunkHasFrames(c)) { chunkState[c] = 2; continue; }
-        const k = c - c0, score = k >= 0 ? k : -k * 1.6;
-        if (score < bestScore) { bestScore = score; best = c; }
+        const k = c - c0, dist = k >= 0 ? k : -k * 1.6;
+        if (!chunkState[TIER][c]) {
+          if (!chunkHasFrames(TIER, c)) chunkState[TIER][c] = 2;
+          else { const sc = dist + (MID ? 3 : 0); if (sc < bestScore) { bestScore = sc; best = [TIER, c]; } }
+        }
+        if (MID && !chunkState[MID][c] && !chunkState[TIER][c] && k >= -2 && chunkHasFrames(MID, c)) {
+          if (dist < bestScore) { bestScore = dist; best = [MID, c]; }
+        }
       }
-      if (best < 0) return;
-      fetchChunk(best);
+      if (!best) return;
+      fetchChunk(best[0], best[1]);
     }
   }
   function loadPreview() {
@@ -143,18 +163,26 @@
   function draw() {
     const i = Math.round(p * (N - 1));
     let bm = null, j;
+    // Siempre lo más nítido posible: 1080p cerca → intermedia cerca → el fotograma nítido más cercano aunque vaya algo
+    // atrasado (la animación se pone al día al llegar el bueno) → solo si no hay nada nítido en 60 fotogramas durante 4 s, la vista previa.
+    // Mientras no haya ningún fotograma nítido, no se dibuja nada y se queda la imagen inicial (que ya es 1080p).
     if (hiBmp.has(i)) bm = touch(hiBmp, i);
     else if ((j = nearest(hiBmp, i, 1)) >= 0) bm = touch(hiBmp, j);
+    else if ((j = nearest(midBmp, i, 1)) >= 0) bm = touch(midBmp, j);
+    else if ((j = nearestSharp(i, 60)) >= 0) bm = hiBmp.has(j) ? touch(hiBmp, j) : touch(midBmp, j);
+    else if (!shown) return null;
+    else if (performance.now() - lastSharp < 4000) return 'hold';   // se queda el último nítido en pantalla
     else if ((j = nearest(loBmp, i, 1)) >= 0) bm = touch(loBmp, j);
-    else if ((j = nearest(hiBmp, i, N)) >= 0) bm = touch(hiBmp, j);
     else if ((j = nearest(loBmp, i, N)) >= 0) bm = touch(loBmp, j);
+    else if ((j = nearestSharp(i, N)) >= 0) bm = hiBmp.has(j) ? touch(hiBmp, j) : touch(midBmp, j);
     if (!bm) return null;
+    if (bm.width >= 900) lastSharp = performance.now();
     const g = fit();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(bm, g.x, g.y, g.w, g.h);
-    if (!shown) { shown = true; canvas.classList.add('ready'); }
+    if (!shown) { shown = true; canvas.classList.add('ready'); dispatchEvent(new Event('unikal:seq-ready')); }
     return g;
   }
   function anchorAt(key, f) {
@@ -216,16 +244,15 @@
     p += (target - p) * (reduce ? 1 : .18);
     if (Math.abs(target - p) < .0002) p = target;
     schedule();
-    if (dirty || p !== drawnP) { const g = draw(); if (g) { geo = g; drawnP = p; dirty = false; } }
-    if (geo) overlay(geo);
+    if (dirty || p !== drawnP) { const g = draw(); if (g && g !== 'hold') { geo = g; drawnP = p; dirty = false; } }
+    if (geo || man) overlay(geo || fit());
   }
 
-  // La secuencia se pide cuando la página ya ha terminado de cargar, para que abra al instante
-  const pageLoaded = new Promise((res) => (document.readyState === 'complete' ? res() : addEventListener('load', res, { once: true })));
-  Promise.all([fetch('assets/seq/manifest.json').then((r) => r.json()), pageLoaded]).then(([m]) => {
+  // La secuencia empieza a bajar enseguida (mientras se ve la pantalla de carga), sin esperar al resto de la página
+  fetch('assets/seq/manifest.json').then((r) => r.json()).then((m) => {
     man = m; N = m.n; CH = m.ch || 12; anchors = m.anchors; readScroll();
-    loadPreview();
     pumpChunks();
+    setTimeout(() => { if (!previewAsked) { previewAsked = true; loadPreview(); } }, 5000);
   }).catch(() => {});
   addEventListener('scroll', () => { readScroll(); pumpChunks(); }, { passive: true });
   addEventListener('resize', () => { resize(); readScroll(); });
