@@ -16,11 +16,11 @@ return {
 			corrodeAcc = corrodeAcc + dt
 			if corrodeAcc >= 0.6 then
 				corrodeAcc = 0
-				for _ = 1, math.ceil(3 * ctx.intensity) do
+				for _ = 1, math.ceil(4 * ctx.intensity) do
 					local x, z = ctx.randomPoint()
 					local part = ctx.D.RandomTopPart(x, z, ctx.bounds.top + 40)
 					if part then
-						ctx.D.Damage(part, 30, nil, { shatter = true })
+						ctx.D.Damage(part, 45, nil, { shatter = true })
 					end
 				end
 			end

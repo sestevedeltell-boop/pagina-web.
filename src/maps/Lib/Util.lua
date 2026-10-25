@@ -294,6 +294,30 @@ function Builder:Stairs(name, x, z, y1, y2, width, length, dir, color, material)
 	end
 end
 
+-- Cuna (rampa/tejado). La parte alta queda hacia +Z; rotY gira alrededor del eje vertical (grados).
+function Builder:Wedge(name, size, pos, color, material, rotY, opts)
+	opts = opts or {}
+	local w = Instance.new("WedgePart")
+	w.Name = name
+	w.Anchored = true
+	w.Size = size
+	w.Color = color or Util.Colors.Concrete
+	w.Material = material or M.SmoothPlastic
+	w.CanTouch = false
+	if opts.indestructible then
+		w:SetAttribute("Indestructible", true)
+	end
+	w.CFrame = CFrame.new(self.origin + pos) * CFrame.Angles(0, math.rad(rotY or 0), 0)
+	w.Parent = self.parent
+	local s = self.state
+	s.count = s.count + 1
+	if os.clock() - (s.lastYield or 0) > Util.BuildBudget then
+		task.wait()
+		s.lastYield = os.clock()
+	end
+	return w
+end
+
 -- Escalera de mano (se trepa)
 function Builder:Ladder(name, x, z, y1, y2)
 	local t = Instance.new("TrussPart")
@@ -380,6 +404,12 @@ end
 -- Marca un modelo para que los clientes lo hagan girar (sin coste para el servidor).
 -- axis = "X", "Y" o "Z"; rpm = vueltas por minuto. El giro es alrededor del centro del modelo.
 function Builder:Spin(model, rpm, axis)
+	-- lo que gira no se rompe (el giro es solo visual en cada cliente)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d:SetAttribute("Indestructible", true)
+		end
+	end
 	model:SetAttribute("GiroRPM", rpm)
 	model:SetAttribute("GiroEje", axis or "Y")
 	game:GetService("CollectionService"):AddTag(model, "IslasGira")

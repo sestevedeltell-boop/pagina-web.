@@ -123,7 +123,7 @@ test("partida", function()
 	ok = Shop:InvokeServer("buy", "RanuraExtra")
 	ok = Shop:InvokeServer("buy", "Jetpack")
 	check(#d1.Equipped.Gears == 2, "deberia llevar 2 gears con la ranura extra (" .. #d1.Equipped.Gears .. ")")
-	SimAdvance(1)
+	SimAdvance(5) -- por si la ronda aun no habia devuelto a los jugadores al lobby
 	local tools = 0
 	for _, t in ipairs(p1.Backpack:GetChildren()) do if t:IsA("Tool") then tools = tools + 1 end end
 	print("  herramientas en la mochila: " .. tools)

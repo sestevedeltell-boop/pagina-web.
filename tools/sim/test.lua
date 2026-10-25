@@ -62,6 +62,16 @@ test("mapas", function()
 			for _, d in ipairs(folder:GetDescendants()) do
 				if d:IsA("BasePart") then parts = parts + 1 end
 			end
+			if DUMP then
+				for _, d in ipairs(folder:GetDescendants()) do
+					if d:IsA("BasePart") then
+						local r = d.CFrame.Rot
+						print(string.format("PART\t%s\t%s\t%.2f,%.2f,%.2f\t%.2f,%.2f,%.2f\t%.3f,%.3f,%.3f\t%.2f,%.2f,%.2f\t%s\t%s\t%s",
+							name, d.Name, d.Size.X, d.Size.Y, d.Size.Z, d.Position.X, d.Position.Y, d.Position.Z, r.X, r.Y, r.Z,
+							d.Color.R, d.Color.G, d.Color.B, tostring(d.Transparency), tostring(d.CanCollide), tostring(d.Shape)))
+					end
+				end
+			end
 			print(string.format("%s: %d piezas, %d spawns, construido en %.1fs reales", name, parts, #cur.Spawns, os.clock() - t0))
 			check(#cur.Spawns >= 8, name .. ": pocos spawns")
 			for _, d in ipairs(folder:GetDescendants()) do
@@ -74,10 +84,21 @@ test("mapas", function()
 			end
 
 			-- grafo de apoyos
-			SimAdvance(20)
+			for _ = 1, 120 do
+				if Destruction.Stats().graphReady then break end
+				SimAdvance(1)
+			end
 			local st = Destruction.Stats()
 			check(st.graphReady, name .. ": el grafo de apoyos no termino")
 			print(string.format("  destruccion: %d piezas registradas", st.parts))
+			if st.loose > 0 then
+				local names = {}
+				for _, p in ipairs(st.looseParts) do
+					names[#names + 1] = p.Name .. "@" .. string.format("%.0f,%.0f,%.0f", p.Position.X - Config.MapOrigin.X, p.Position.Y - Config.MapOrigin.Y, p.Position.Z - Config.MapOrigin.Z)
+				end
+				print("  nacen sin apoyo (" .. st.loose .. "): " .. table.concat(names, " "))
+			end
+			check(#Destruction.FindUnsupported() == 0, name .. ": quedan piezas sin apoyo tras cargar")
 
 			-- ascensores: llamar a cada planta
 			for _, d in ipairs(folder:GetDescendants()) do

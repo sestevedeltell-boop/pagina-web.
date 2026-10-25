@@ -46,16 +46,27 @@ local function matName(part)
 	return typeof(m) == "EnumItem" and m.Name or tostring(m)
 end
 
-local function inElevator(part, root)
+-- "cabin" si la pieza es de una cabina de ascensor (se mueve: se ignora), "shaft" si es del hueco
+local function elevatorPart(part, root)
 	local p = part.Parent
 	while p and p ~= root do
 		local n = p.Name
-		if n:match("_Cabina$") or n:match("_Hueco$") then
-			return true
+		if n:match("_Cabina$") then
+			return "cabin"
+		elseif n:match("_Hueco$") then
+			return "shaft"
 		end
 		p = p.Parent
 	end
-	return false
+	return nil
+end
+
+-- Media altura real de la pieza en el mundo (tiene en cuenta la rotacion: columnas cilindricas, etc.)
+local function halfHeight(part)
+	local s = part.Size
+	local _, _, _, r00, r01, r02, r10, r11, r12 = part.CFrame:GetComponents()
+	local _ = r00 + r01 + r02
+	return 0.5 * (math.abs(r10) * s.X + math.abs(r11) * s.Y + math.abs(r12) * s.Z)
 end
 
 local function maxHp(part)
@@ -89,6 +100,7 @@ function Destruction.Begin(folder, floorY)
 		root = {}, -- [id] = bool
 		neigh = {}, -- [id] = { ids }
 		hp = {}, -- [id] = vida actual (se calcula al primer golpe)
+		fixed = {}, -- [id] = true si no se rompe nunca (huecos de ascensor, piezas indestructibles): apoyo fijo
 		stage = {}, -- [id] = 0/1/2 (oscurecimiento por dano)
 		graphReady = false,
 		dirty = false,
@@ -107,16 +119,25 @@ function Destruction.Begin(folder, floorY)
 
 	local n = 0
 	for _, d in ipairs(folder:GetDescendants()) do
-		if d:IsA("BasePart") and not NOT_FRAGILE[d.Name] and not d:GetAttribute("Indestructible") then
+		if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
+			local elev = elevatorPart(d, folder)
+			local indestructible = NOT_FRAGILE[d.Name] or d:GetAttribute("Indestructible") or elev == "shaft"
 			local invisibleHelper = d.Transparency >= 0.95 and not d.CanCollide
-			if not invisibleHelper and not inElevator(d, folder) then
+			-- las cabinas se mueven y las piezas sin colision indestructibles (mar, spawns) no sujetan nada
+			if elev ~= "cabin" and not invisibleHelper and not (indestructible and not d.CanCollide) then
 				n = n + 1
 				S.ids[d] = n
 				S.parts[n] = d
 				S.alive[n] = true
-				local bottom = d.Position.Y - d.Size.Y / 2
+				local bottom = d.Position.Y - halfHeight(d)
 				local s = d.Size
-				S.root[n] = bottom <= floorY + 0.75 or math.max(s.X, s.Z) > 160
+				if indestructible then
+					-- apoyo fijo: lo que se apoya en un hueco de ascensor o en una pieza indestructible no se cae
+					S.fixed[n] = true
+					S.root[n] = true
+				else
+					S.root[n] = bottom <= floorY + 0.75 or math.max(s.X, s.Z) > 160
+				end
 				-- piezas que estaban sueltas en el mapa original (muebles): se anclan hasta que algo las golpee
 				if not d.Anchored then
 					d.Anchored = true
@@ -130,7 +151,7 @@ function Destruction.Begin(folder, floorY)
 	task.spawn(function()
 		local budget = Config.GraphBudgetMs / 1000
 		local start = os.clock()
-		local pad = Vector3.new(0.3, 0.3, 0.3)
+		local pad = Vector3.new(0.8, 0.8, 0.8) -- tolerancia de contacto (carteles pegados a paredes, etc.)
 		for i = 1, n do
 			if S == nil or S.token ~= token then
 				return
@@ -159,6 +180,16 @@ function Destruction.Begin(folder, floorY)
 		end
 		if S and S.token == token then
 			S.graphReady = true
+			-- lo que nace sin apoyo (carteles colgados, luces...) se considera sujeto: no se cae de golpe
+			local loose = Destruction.FindUnsupported()
+			for _, p in ipairs(loose) do
+				S.root[S.ids[p]] = true
+			end
+			S.initialLoose = #loose
+			S.initialLooseNames = {}
+			for i = 1, math.min(12, #loose) do
+				S.initialLooseNames[i] = loose[i]
+			end
 		end
 	end)
 	return n
@@ -186,7 +217,7 @@ function Destruction.Stats()
 	if not S then
 		return { parts = 0 }
 	end
-	return { parts = S.count, broken = S.broken, collapsed = S.collapsed, graphReady = S.graphReady, physics = PhysicsBudget.Count(), rubble = PhysicsBudget.RubbleCount() }
+	return { parts = S.count, broken = S.broken, collapsed = S.collapsed, graphReady = S.graphReady, physics = PhysicsBudget.Count(), rubble = PhysicsBudget.RubbleCount(), loose = S.initialLoose or 0, looseParts = S.initialLooseNames or {} }
 end
 
 -- ======================================================================
@@ -231,7 +262,7 @@ local function detach(part, impulse)
 end
 
 local function breakId(id, impulse, opts)
-	if not S or not S.alive[id] then
+	if not S or not S.alive[id] or S.fixed[id] then
 		return
 	end
 	S.alive[id] = false
@@ -271,7 +302,7 @@ function Destruction.Break(part, impulse, opts)
 end
 
 local function damageId(id, amount, impulse, opts)
-	if not S or not S.alive[id] then
+	if not S or not S.alive[id] or S.fixed[id] then
 		return false
 	end
 	local part = S.parts[id]
@@ -375,7 +406,7 @@ function Destruction.Shake(intensity)
 	local hits = math.floor(14 * intensity)
 	for _ = 1, hits do
 		local id = math.random(S.count)
-		if S.alive[id] then
+		if S.alive[id] and not S.fixed[id] then
 			local part = S.parts[id]
 			local height = math.max(0, part.Position.Y - S.floorY)
 			local dmg = (18 + height * 0.6) * intensity
@@ -407,7 +438,7 @@ function Destruction.Ignite(part)
 		return false
 	end
 	local id = S.ids[part]
-	if not id or not S.alive[id] or S.burning[id] or S.burningCount >= MAX_BURNING then
+	if not id or not S.alive[id] or S.fixed[id] or S.burning[id] or S.burningCount >= MAX_BURNING then
 		return false
 	end
 	if not FLAMMABLE[matName(part)] then
@@ -444,9 +475,17 @@ local function updateFires(dt)
 		return
 	end
 	local now = clock()
-	for id, b in pairs(S.burning) do
-		local part = S.parts[id]
-		if not S.alive[id] or not part.Parent then
+	-- copia de las claves: el fuego se propaga (anade entradas) mientras se recorre
+	local ids = {}
+	for id in pairs(S.burning) do
+		ids[#ids + 1] = id
+	end
+	for _, id in ipairs(ids) do
+		local b = S and S.burning[id]
+		local part = b and S.parts[id]
+		if not b then
+			-- ya se apago o se rompio en esta misma vuelta
+		elseif not S.alive[id] or not part.Parent then
 			if b.fire and b.fire.Parent then
 				b.fire:Destroy()
 			end
@@ -454,7 +493,7 @@ local function updateFires(dt)
 			S.burningCount = S.burningCount - 1
 		else
 			-- quema poco a poco y se propaga a los vecinos inflamables
-			damageId(id, 6 * dt, nil, { burnt = true })
+			damageId(id, 10 * dt, nil, { burnt = true })
 			if now - b.t > 3 and math.random() < 0.25 * dt * 4 then
 				local list = S.neigh[id]
 				if list and #list > 0 then
@@ -524,6 +563,37 @@ local function collapseComponent(component)
 			end
 		end
 	end
+end
+
+-- Piezas que ahora mismo no estan unidas a ninguna raiz (para depurar mapas: deberia ser 0 al cargar)
+function Destruction.FindUnsupported()
+	if not S or not S.graphReady then
+		return {}
+	end
+	local reached, queue, head = {}, {}, 1
+	for id = 1, S.count do
+		if S.alive[id] and S.root[id] then
+			reached[id] = true
+			queue[#queue + 1] = id
+		end
+	end
+	while head <= #queue do
+		local id = queue[head]
+		head = head + 1
+		for _, j in ipairs(S.neigh[id] or {}) do
+			if S.alive[j] and not reached[j] then
+				reached[j] = true
+				queue[#queue + 1] = j
+			end
+		end
+	end
+	local out = {}
+	for id = 1, S.count do
+		if S.alive[id] and not reached[id] then
+			out[#out + 1] = S.parts[id]
+		end
+	end
+	return out
 end
 
 -- BFS desde las raices: todo lo vivo que no se alcance esta colgando y se derrumba

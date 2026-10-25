@@ -1,128 +1,159 @@
 # Islas de Desastres
 
-Sistema de **mundos/islas** para un juego de Roblox de desastres naturales. Las islas **no existen** hasta que
-se votan: al terminar la ronda los jugadores votan, **solo entonces se construye** la isla ganadora (por
-código, sin lag para el resto), se teletransporta a todos y, al acabar, se **borra**.
+Juego completo de supervivencia a desastres para Roblox, todo por código: lobby, votación de mapas,
+11 islas que solo existen mientras se juegan, 16 desastres con destrucción real de edificios, economía con
+monedas, niveles, logros, tienda de gears y estelas, recompensa diaria y modo espectador.
 
-## Mundos incluidos
-
-| Mapa | Qué tiene | Ascensores |
-|---|---|---|
-| **Aeropuerto** | Terminal de 3 plantas (check-in, seguridad, restaurantes, bar VIP), cinta de equipajes que mueve a los jugadores, 2 aviones con interior y escalerilla, hangar, camiones, torre de control, pista | 2 en la terminal (3 plantas) + 1 en la torre (4 paradas, hasta 90 studs) |
-| **Centro Comercial** | 4 plantas alrededor de un atrio con claraboya y fuente, tiendas, cine en la última planta, aparcamiento | 2 ascensores panorámicos de cristal |
-| **Rascacielos** | Torre de 12 plantas + azotea (helipuerto, piscina), sky bar, escalera de emergencia en zigzag | 3 ascensores, 13 paradas |
-| **Plataforma Petrolífera** | Cubierta sobre 4 patas en alta mar, torre de perforación (se sube por escalera), alojamiento, grúa, helipuerto, muelle con bote | 1 ascensor muelle → cubierta → módulo → helipuerto |
-| **Estación Espacial** | Núcleo de 4 plantas, 4 brazos con laboratorio, invernadero, reactor y hangar con lanzadera, paneles solares. **Gravedad baja** | 2 ascensores |
-
-Los ascensores son reales: botón de llamada en cada planta (tecla **E**), botonera dentro de la cabina
-(clic en el número), puertas que se abren y cierran, y cola de peticiones.
-
-## Desastres
-
-Al llegar a la isla los jugadores ven un aviso (`Config.DisasterDelay` = 10 s) y después empieza **un desastre al azar**
-de los que admite ese mapa. Dura lo que la ronda y se limpia solo al terminar (también restaura la iluminación).
-En la votación cada mapa muestra qué desastres puede tener.
-
-| Desastre | Qué hace |
-|---|---|
-| **Terremoto** | La cámara tiembla, tira a jugadores al suelo y rompe hasta la mitad de las piezas pequeñas (paredes, muebles, cristales); los ascensores no se rompen |
-| **Incendio** | Focos de fuego que crecen y queman; algunos aparecen cerca de los jugadores |
-| **Lluvia de meteoritos** | Un círculo rojo avisa 1,8 s antes del impacto; explosión con daño y empujón. Cada vez más rápido |
-| **Inundación** | El agua sube hasta una altura que depende del mapa; abajo te ahogas |
-| **Lava** | El suelo es lava: sube y mata al instante |
-| **Tormenta eléctrica** | Rayos con anillo de aviso, destellos y cielo oscuro |
-| **Lluvia ácida** | Quema a quien esté a cielo abierto; bajo techo estás a salvo |
-| **Tornado** | Recorre la isla, arrastra y lanza por los aires jugadores y piezas sueltas |
-| **Fuga de radiación** | Nubes verdes que dañan (estación espacial) |
-
-| Mapa | Desastres posibles |
-|---|---|
-| Aeropuerto | Terremoto, Incendio, Meteoritos, Inundación (hasta la planta 1), Tormenta eléctrica, Tornado |
-| Centro Comercial | Terremoto, Incendio, Meteoritos, Lluvia ácida, Lava (hay que llegar a la última planta) |
-| Rascacielos | Terremoto, Incendio, Tormenta eléctrica, Lluvia ácida, Tornado, Lava |
-| Plataforma Petrolífera | Tornado, Tormenta eléctrica, Meteoritos, Inundación (tsunami), Incendio, Lluvia ácida |
-| Estación Espacial | Meteoritos, Incendio, Terremoto, Fuga de radiación |
-
-Ajustes por mapa en su `DisasterConfig` (por ejemplo `Flood = { maxHeight = 30 }`, `Meteors = { damage = 60, radius = 14 }`).
-Para desactivarlos todos: `EnableDisasters = false` en `Config`.
-
-**Añadir un desastre:** crea un ModuleScript en `src/server/Disasters/` con `Title`, `Description` y
-`Run(ctx)`; añade su nombre al `Disasters = {...}` de los mapas donde quieras que salga. `Run` es un bucle
-`while ctx.active() do ... end`. El `ctx` ofrece `players()`, `damage()`, `randomPoint()`, `groundY(x, z)`,
-`build:Box(...)` (efectos que se borran solos), `fx(...)` (efectos de pantalla), `setLighting(...)`,
-`tween(...)`, `fragileParts()` y `progress()`.
+Inspirado en el género de *Natural Disaster Survival* y *Survive the Disasters*: rondas cortas, sorpresa,
+rachas, recompensas constantes y edificios que se caen a pedazos.
 
 ## Instalación
 
-**Opción A: instalador (sin Rojo).** Abre `dist/instalar_en_studio.lua`, copia todo, pégalo en la
-*Barra de comandos* de Studio (pestaña *Ver* → *Barra de comandos*) y pulsa Enter. Crea 4 carpetas
-(`ReplicatedStorage.IslasShared`, `ServerStorage.IslasMapas`, `ServerScriptService.IslasServer`,
-`StarterPlayerScripts.IslasClient`) y no toca nada más de tu juego. Puedes volver a ejecutarlo para actualizar.
+**Opción A: plugin instalador (la más cómoda, sin Rojo).** Abre `dist/plugin_instalador.lua`, copia todo y
+pégalo en un Script nuevo de Studio (por ejemplo en ServerStorage). Clic derecho sobre el Script →
+*Save as Local Plugin...* y después borra ese Script. En la pestaña *Plugins* aparece el botón
+**Instalar Islas**: púlsalo cada vez que quieras instalar o actualizar.
 
-**Opción B: Rojo.** `rojo serve` con `default.project.json` y conecta Studio.
+**Opción B: Barra de comandos.** Pega en la *Barra de comandos* (*Ver* → *Barra de comandos*) los archivos de
+`dist/partes/` en orden (`instalar_parte_1.lua`, `_2`, `_3`...) pulsando Enter tras cada uno. También está
+`dist/instalar_en_studio.lua` con todo junto, pero puede ser demasiado largo para la Barra de comandos.
 
-**Opción C: a mano.** Crea cada archivo de `src/` como script en la misma ruta que indica
-`default.project.json` (`.lua` = ModuleScript, `.server.lua` = Script, `.client.lua` = LocalScript).
+Cualquiera de los dos crea (o reemplaza) solo estas 4 carpetas: `ReplicatedStorage.IslasShared`,
+`ServerStorage.IslasMapas`, `ServerScriptService.IslasServer` y `StarterPlayer.StarterPlayerScripts.IslasClient`.
+
+**Opción C: Rojo.** `rojo serve` con `default.project.json` y conecta Studio.
+
+**Opción D: a mano.** Crea cada archivo de `src/` en la ruta que indica `default.project.json`
+(`.lua` = ModuleScript, `.server.lua` = Script, `.client.lua` = LocalScript).
+
+Para guardar datos de verdad en Studio activa *Game Settings → Security → Enable Studio Access to API Services*.
+Sin eso se juega con datos temporales (no se pierde ni se sobrescribe nada).
+
+**Recomendado para rendimiento:** activa `Workspace.StreamingEnabled`. Las islas se construyen lejos del
+lobby y los jugadores solo cargan lo que tienen cerca (el teletransporte ya pide la zona antes de llegar).
 
 Si cambias algo en `src/`, regenera el instalador con `npm run installer`.
 
-## Cómo encaja con tu juego
+## Cómo es una partida
 
-Por defecto `RoundLoop` lleva el ciclo: espera → votación → construye isla → teletransporta → ronda → vuelta al lobby.
-Si **ya tienes tu propio bucle de rondas**, pon `RunDefaultLoop = false` en `IslasShared/Config` y llama tú:
+1. **Descanso** en el lobby (tienda, cofre diario, obby con premio, camas elásticas, clasificaciones).
+2. **Votación** entre 3 mapas (no repite el último). Cada tarjeta muestra los desastres posibles.
+3. Se **construye la isla** ganadora (repartido entre frames para no dar tirones) y se teletransporta a todos.
+4. **Aviso** de unos segundos y empieza el desastre. Puede haber:
+   - un **modificador de ronda** (doble desastre, monedas x2, noche, gravedad baja, pies rápidos, modo hiper, niebla, edificios de papel),
+   - un **desastre sorpresa** (no se sabe cuál es hasta que empieza),
+   - un **segundo desastre** a mitad de ronda.
+5. Durante la ronda: monedas repartidas por el mapa, +monedas cada 15 s vivo, lista de muertes con la causa,
+   contador de vivos, espectador para los muertos.
+6. **Resultados**: monedas que cuentan hacia arriba, XP, racha y confeti si sobrevives. La isla se borra.
+
+## Mapas (11)
+
+| Mapa | Lo más destacado | Ascensores |
+|---|---|---|
+| Aeropuerto | terminal de 3 plantas, aviones, hangar, torre de control | 3 |
+| Centro comercial | atrio de 4 plantas, cine, aparcamiento | 2 de cristal |
+| Rascacielos | 12 plantas, helipuerto y piscina en la azotea | 3 (13 paradas) |
+| Plataforma petrolífera | alta mar, torre de perforación, helipuerto | 1 (muelle → helipuerto) |
+| Estación espacial | núcleo + 4 módulos, gravedad baja | 2 |
+| Ciudad | casas de 1-3 plantas, tiendas, gasolinera, parque, depósito de agua | torre de apartamentos |
+| Castillo | murallas con adarve, torres, foso, mercado, torre del homenaje | montacargas |
+| Estación de esquí | montaña por terrazas, refugio, cabañas, telesilla | funicular a la cima |
+| Crucero | 4 cubiertas en alta mar, piscina, botes salvavidas | 2 |
+| Parque de atracciones | noria y tiovivo que giran, montaña rusa, casa del terror | torre de caída |
+| Isla tropical | palmeras, cabañas, barco pirata, montaña con cascada | faro con luz giratoria |
+
+**Tus propios mapas:** mete un `Model` en `ServerStorage.IslasMapasPropios` y aparece en la votación.
+Atributos opcionales: `Title`, `Description`, `Disasters` (por ejemplo `"Earthquake,Fire,Tornado"`).
+Las piezas llamadas `Spawn`/`SpawnPoint` (o `SpawnLocation`) son los puntos de aparición; si no hay, se buscan solos.
+Las piezas sueltas (muebles) se anclan al cargar y solo se sueltan cuando un desastre las golpea.
+
+## Desastres (16)
+
+Terremoto · Incendio (se propaga por la madera) · Lluvia de meteoritos · Inundación · Lava (derrite los edificios) ·
+Tormenta eléctrica · Lluvia ácida (corroe los tejados) · Tornado · Fuga de radiación · Ventisca (hogueras para calentarse) ·
+Tormenta de arena · Volcán (surge del suelo y lanza bombas) · Tsunami (olas que arrasan) · Virus mortal (contagio y estaciones de cura) ·
+Agujero negro (absorbe piezas) · Invasión alienígena (ovnis con rayo abductor y láseres).
+
+Cada mapa elige qué desastres admite (`Disasters`) y puede ajustarlos (`DisasterConfig`, por ejemplo la altura del agua).
+
+## Destrucción y rendimiento
+
+La destrucción está pensada para que se vea espectacular sin hundir los FPS:
+
+- **Paredes y suelos troceados** (`Config.ChunkSize`): se rompen por partes, no enteros.
+- **Vida por material y tamaño**: el cristal estalla enseguida, la madera arde, el hormigón y el metal aguantan.
+  Las piezas se oscurecen al recibir daño.
+- **Derrumbes reales**: al cargar el mapa se calcula (repartido entre frames) quién se apoya en quién.
+  Si algo se queda sin conexión con el suelo, se cae. Lo hace en **bloques soldados**: muchas piezas forman un
+  solo cuerpo físico, mucho más barato que piezas sueltas.
+- **Presupuesto de física** (`MaxPhysicsBodies`): nunca hay más de N cuerpos simulándose. Lo que no cabe se
+  convierte en **fragmentos visuales en el cliente**.
+- **Los escombros se congelan**: cuando un trozo se para (o tras `DebrisMaxLife` s) se ancla. Sigue viéndose como
+  escombro pero ya no cuesta física. Hay un máximo de escombros (`MaxRubbleParts`).
+- **Los escombros no chocan entre sí** (grupo de colisión propio), que es lo más caro de la física.
+- **Fragmentos solo en el cliente**: los añicos los crea cada jugador localmente, reutilizando piezas de un pool.
+  El servidor no simula ni replica nada.
+- **Calidad automática**: si un jugador va a menos de ~38 FPS se reducen fragmentos, partículas y efectos; si va
+  sobrado, se suben. También se puede fijar en *Ajustes*.
+- **Borrado repartido**: las piezas rotas y el mapa al terminar se borran poco a poco, sin tirones.
+- **Efectos de desastre en el cliente**: meteoritos, rayos, olas, tornados, agujeros negros y ovnis se dibujan en
+  cada cliente con movimiento determinista basado en el reloj del servidor. No se replican piezas en movimiento.
+- Los muebles que estaban sueltos se anclan hasta que algo los golpea, así no consumen física mientras no pasa nada.
+- Las piezas del mapa no generan eventos `Touched` y las pequeñas no proyectan sombra.
+
+## Economía y progresión
+
+- **Monedas**: sobrevivir (+bonus por racha), participar, cada 15 s vivo, monedas del mapa (las rosas valen más),
+  logros, subidas de nivel, obby del lobby y recompensa diaria (racha de 7 días).
+- **Niveles y rangos** (Novato → Inmortal) con barra de XP.
+- **23 logros** con recompensa.
+- **Tienda**: 9 gears (linterna, botiquín, globo, paraguas, bobinas de velocidad y gravedad, mochila cohete,
+  garfio, escudo), 5 estelas y 4 mejoras permanentes (ranura de gear extra, imán de monedas, más vida, suerte).
+- `leaderstats` (Victorias, Nivel, Monedas) y clasificaciones en el lobby (servidor y mundial).
+
+## Integrar con tu propio juego
+
+Todo se ajusta en `IslasShared/Config`. Para llevar tú las rondas pon `RunDefaultLoop = false` y usa:
 
 ```lua
-local MapService  = require(game.ServerScriptService.IslasServer.MapService)
-local VoteService = require(game.ServerScriptService.IslasServer.VoteService)
+local S = game.ServerScriptService.IslasServer
+local MapService = require(S.MapService)
+local VoteService = require(S.VoteService)
+local DisasterService = require(S.DisasterService)
 
--- al terminar tu ronda:
-local winner = VoteService.Run(VoteService.PickOptions(3), 15) -- bloquea hasta acabar la votación
-MapService.Load(winner)                                         -- construye la isla (aquí aparece por primera vez)
+local winner = VoteService.Run(VoteService.PickOptions(3), 12)
+MapService.Load(winner)
 MapService.TeleportToMap(game.Players:GetPlayers())
-local DisasterService = require(game.ServerScriptService.IslasServer.DisasterService)
-DisasterService.Start(MapService.GetCurrent(), 180)             -- desastre al azar del mapa (opcional)
+DisasterService.Start(MapService.GetCurrent(), 150)        -- desastre al azar del mapa
 -- ... tu ronda ...
-DisasterService.Stop()                                          -- antes de Unload, para restaurar la luz
+DisasterService.StopAll()
 MapService.ReturnToLobby(game.Players:GetPlayers())
-MapService.Unload()                                             -- la isla desaparece
+MapService.Unload()
 ```
 
-- Los puntos de aparición de cada isla están en `MapService.GetCurrent().Spawns`.
-- El lobby: si existe `workspace.Lobby` se usan sus `SpawnLocation`; si no, cualquier `SpawnLocation` del workspace;
-  y si no hay ninguno se crea un lobby simple.
-- Los jugadores que mueren durante la ronda reaparecen en el lobby (comportamiento normal de Roblox).
-- Las islas se construyen en `Config.MapOrigin` (por defecto `8000, 1000, 0`), lejos del lobby.
+El lobby propio se construye solo si no existe ya `workspace.Lobby` (`Config.BuildLobby`).
 
-## Añadir un mundo nuevo
+## Añadir contenido
 
-Crea un ModuleScript en `src/maps/Builders/` (cualquier nombre; aparece solo en la votación):
-
-```lua
-local Util = require(script.Parent.Parent.Lib.Util)
-local Elevator = require(script.Parent.Parent.Lib.Elevator)
-local V, C, M = Util.V, Util.C, Util.M
-
-return {
-  Title = "Mi Mundo", Description = "Texto de la votación",
-  Lighting = { ClockTime = 14 },   -- opcional
-  Gravity = 120,                    -- opcional
-  Bounds = { x1 = -100, x2 = 100, z1 = -100, z2 = 100, top = 80, floor = 0 }, -- zona jugable (para los desastres)
-  Disasters = { "Earthquake", "Fire", "Meteors" },                             -- los que pueden salir aqui
-  Build = function(b)
-    b:Box("Suelo", V(200, 2, 200), V(0, -1, 0), C(90, 140, 70), M.Grass)
-    b:Wall("Pared", "x", 0, -20, 20, 0, 12, 1, C(200, 200, 200), M.Concrete, { {from=-4, to=4, bottom=0, top=9} })
-    Elevator.build(b, { name = "Asc", x = 0, z = -30, floors = { 0, 20, 40 } })
-    b:Spawn(V(0, 1, 40))
-  end,
-}
-```
-
-`Util` ofrece: `Box`, `Pillar`, `Ball`, `Wall` (con huecos y ventanas), `Slab` (suelo con agujeros),
-`Stairs`, `Ladder`, `Board` (cartel con texto), `Sea` / `KillPlane`, `Pine`, `Spawn`, `Group` y `At`
-(subgrupo con origen desplazado). Los ascensores miran a +Z; los agujeros de los forjados salen de `Elevator.hole(cfg)`.
+- **Mapa nuevo**: ModuleScript en `src/maps/Builders/` con `Title`, `Description`, `Bounds`, `Disasters` y
+  `Build(b)`. `Util` (piezas, paredes con ventanas, suelos con agujeros, escaleras, carteles...),
+  `Buildings` (casas, torres con ascensor y escaleras, palmeras, coches, farolas) y `Elevator` hacen casi todo.
+  `b:Spin(modelo, rpm, eje)` hace girar algo en los clientes.
+- **Desastre nuevo**: ModuleScript en `src/server/Disasters/` con `Run(ctx)` (bucle `while ctx.active()`),
+  su ficha en `src/shared/DisasterInfo.lua` y su nombre en los `Disasters` de los mapas.
+  `Hazards` tiene impactos avisados, zonas que crecen y líquidos que suben; `ctx.D` es la destrucción.
+- **Objetos de la tienda**: `src/shared/Catalog.lua` y su efecto en `src/server/Gear.lua`.
+- **Sonidos y música**: `src/shared/Sounds.lua` (pon ids de la biblioteca).
 
 ## Pruebas
 
-`npm install && npm test` construye cada mapa en un simulador de la API de Roblox (`tools/sim/`), llama a todos los
-ascensores, comprueba spawns, teletransporte, votación, todos los desastres de cada mapa y una vuelta completa de `RoundLoop`.
-**No sustituye a probar en Studio**: no simula la física (por ejemplo, cómo se agarran los jugadores a la cabina al moverse).
+`npm install && npm test` ejecuta un simulador de la API de Roblox (`tools/sim/`):
+
+- construye los 11 mapas, prueba todos los ascensores, la destrucción y los derrumbes, y avisa de piezas sin apoyo;
+- lanza cada desastre en cada mapa con jugadores;
+- juega partidas completas (fases, votación, resultados, monedas, tienda, recompensa diaria, logros);
+- arranca toda la interfaz del cliente y le envía todos los mensajes del servidor (`node tools/sim/run.js --client`).
+
+El simulador no reproduce la física real ni el render: hay que probar en Studio la sensación de juego, los
+tiempos y los valores de daño.

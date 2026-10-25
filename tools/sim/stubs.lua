@@ -259,7 +259,25 @@ function CF.VectorToWorldSpace(a, p) return p end
 function CF.ToWorldSpace(a, b) return a * b end
 function CF.ToObjectSpace(a, b) return cf(b.Position - a.Position, b.Rot - a.Rot) end
 function CF.Lerp(a, b, t) return cf(a.Position:Lerp(b.Position, t), a.Rot:Lerp(b.Rot, t)) end
-function CF.GetComponents(a) return a.Position.X, a.Position.Y, a.Position.Z, 1, 0, 0, 0, 1, 0, 0, 0, 1 end
+-- matriz de rotacion R = Rx * Ry * Rz (como CFrame.Angles)
+local function rotMatrix(r)
+	local cx, sx = math.cos(r.X), math.sin(r.X)
+	local cy, sy = math.cos(r.Y), math.sin(r.Y)
+	local cz, sz = math.cos(r.Z), math.sin(r.Z)
+	-- Ry*Rz
+	local a00, a01, a02 = cy * cz, -cy * sz, sy
+	local a10, a11, a12 = sz, cz, 0
+	local a20, a21, a22 = -sy * cz, sy * sz, cy
+	-- Rx * (Ry*Rz)
+	return a00, a01, a02,
+		cx * a10 - sx * a20, cx * a11 - sx * a21, cx * a12 - sx * a22,
+		sx * a10 + cx * a20, sx * a11 + cx * a21, sx * a12 + cx * a22
+end
+RotMatrix = rotMatrix
+function CF.GetComponents(a)
+	local r00, r01, r02, r10, r11, r12, r20, r21, r22 = rotMatrix(a.Rot)
+	return a.Position.X, a.Position.Y, a.Position.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22
+end
 function CF.ToEulerAnglesXYZ(a) return a.Rot.X, a.Rot.Y, a.Rot.Z end
 CFrame = {
 	new = function(a, b, c)
@@ -344,6 +362,7 @@ end })
 
 -- funciones de Luau que no existen en Lua 5.3
 math.clamp = function(v, lo, hi) return math.max(lo, math.min(hi, v)) end
+math.atan2 = math.atan2 or function(y, x) return math.atan(y, x) end
 math.round = function(v) return math.floor(v + 0.5) end
 math.sign = function(v) return v > 0 and 1 or (v < 0 and -1 or 0) end
 math.noise = function(x, y, z) return (math.sin((x or 0) * 12.9898 + (y or 0) * 78.233 + (z or 0) * 37.719) * 0.5) end
@@ -800,20 +819,16 @@ function methods.GetTags(self)
 end
 
 -- Modelos y piezas
+local function obbAABB(pos, size, rot)
+	local r00, r01, r02, r10, r11, r12, r20, r21, r22 = RotMatrix(rot)
+	local hx = 0.5 * (math.abs(r00) * size.X + math.abs(r01) * size.Y + math.abs(r02) * size.Z)
+	local hy = 0.5 * (math.abs(r10) * size.X + math.abs(r11) * size.Y + math.abs(r12) * size.Z)
+	local hz = 0.5 * (math.abs(r20) * size.X + math.abs(r21) * size.Y + math.abs(r22) * size.Z)
+	return pos.X - hx, pos.X + hx, pos.Y - hy, pos.Y + hy, pos.Z - hz, pos.Z + hz
+end
 local function partAABB(part)
 	local p = part._p
-	local s, pos = p.Size, p.Position
-	local rot = p.CFrame and p.CFrame.Rot or v3(0, 0, 0)
-	local sx, sy, sz = s.X, s.Y, s.Z
-	local function c(a) return math.abs(math.cos(a)) end
-	local function sn(a) return math.abs(math.sin(a)) end
-	local bx, by = sx * c(rot.Z) + sy * sn(rot.Z), sx * sn(rot.Z) + sy * c(rot.Z)
-	sx, sy = bx, by
-	local bx2, bz = sx * c(rot.Y) + sz * sn(rot.Y), sx * sn(rot.Y) + sz * c(rot.Y)
-	sx, sz = bx2, bz
-	local by2, bz2 = sy * c(rot.X) + sz * sn(rot.X), sy * sn(rot.X) + sz * c(rot.X)
-	sy, sz = by2, bz2
-	return pos.X - sx / 2, pos.X + sx / 2, pos.Y - sy / 2, pos.Y + sy / 2, pos.Z - sz / 2, pos.Z + sz / 2
+	return obbAABB(p.Position, p.Size, p.CFrame and p.CFrame.Rot or v3(0, 0, 0))
 end
 PartAABB = partAABB
 
@@ -1065,8 +1080,7 @@ local function query(params, x1, x2, y1, y2, z1, z2, filterFn)
 end
 
 function methods.GetPartBoundsInBox(self, cframe, size, params)
-	local p = cframe.Position
-	return query(params, p.X - size.X / 2, p.X + size.X / 2, p.Y - size.Y / 2, p.Y + size.Y / 2, p.Z - size.Z / 2, p.Z + size.Z / 2)
+	return query(params, obbAABB(cframe.Position, size, cframe.Rot))
 end
 function methods.GetPartBoundsInRadius(self, pos, r, params)
 	return query(params, pos.X - r, pos.X + r, pos.Y - r, pos.Y + r, pos.Z - r, pos.Z + r, function(e)
