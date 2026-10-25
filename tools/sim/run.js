@@ -27,6 +27,11 @@ if (process.argv.includes("--dump")) code += "DUMP = true\n";
 code += fs.readFileSync(path.join(__dirname, "stubs.lua"), "utf8") + "\n";
 const extraFile = path.join(__dirname, process.argv.includes("--client") ? "client_test.lua" : "test_extra.lua");
 if (fs.existsSync(extraFile)) code += `TEST_EXTRA = ${longStr(fs.readFileSync(extraFile, "utf8"))}\n`;
+const studio = path.join(__dirname, "..", "studio");
+if (fs.existsSync(studio)) {
+  code += `TOOL_EXPORT = ${longStr(fs.readFileSync(path.join(studio, "1_exportar_juego.lua"), "utf8"))}\n`;
+  code += `TOOL_MERGE = ${longStr(fs.readFileSync(path.join(studio, "2_preparar_fusion.lua"), "utf8"))}\n`;
+}
 code += fs.readFileSync(path.join(__dirname, process.argv.includes("--client") ? "client_main.lua" : "test.lua"), "utf8");
 
 const L = lauxlib.luaL_newstate();

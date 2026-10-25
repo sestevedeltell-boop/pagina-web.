@@ -218,12 +218,15 @@ local function load(player)
 	end
 	profiles[player] = { data = data, noSave = noSave, dirty = false }
 
-	local ls = Instance.new("Folder")
+	-- si tu otro juego ya crea leaderstats, se reutiliza y se anaden los valores que falten
+	local ls = player:FindFirstChild("leaderstats") or Instance.new("Folder")
 	ls.Name = "leaderstats"
 	for _, n in ipairs({ "Victorias", "Nivel", "Monedas" }) do
-		local v = Instance.new("IntValue")
-		v.Name = n
-		v.Parent = ls
+		if not ls:FindFirstChild(n) then
+			local v = Instance.new("IntValue")
+			v.Name = n
+			v.Parent = ls
+		end
 	end
 	ls.Parent = player
 	updateLeaderstats(player)

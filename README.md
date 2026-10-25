@@ -34,6 +34,33 @@ lobby y los jugadores solo cargan lo que tienen cerca (el teletransporte ya pide
 
 Si cambias algo en `src/`, regenera el instalador con `npm run installer`.
 
+## Fusionar con tu otro juego
+
+Para unir este juego con el que ya tienes en Studio, cada mapa tuyo pasa a ser un mapa individual que sale en la
+votación y **solo se construye en el mundo cuando gana** (se clona desde ServerStorage y se borra al acabar).
+
+1. **Instala Islas de Desastres en tu juego** (plugin o Barra de comandos, ver arriba). Guarda antes una copia
+   (*Archivo → Guardar como...*).
+2. **Exporta tu juego:** pega `tools/studio/1_exportar_juego.lua` en la Barra de comandos. No cambia nada; crea
+   `ServerStorage.IslasExportacion` con el árbol del juego, la lista de mapas y el código de todos tus scripts.
+   Copia ese texto y súbelo al repositorio (carpeta `otro_juego/`) o pégalo en el chat: con él se compara lo que
+   está repetido (desastres, tienda, datos...) y se queda la versión mejor hecha de cada cosa.
+3. **Prepara la fusión:** pega `tools/studio/2_preparar_fusion.lua` en la Barra de comandos con `APLICAR = false`.
+   Te lista tus mapas y los scripts viejos que chocan (bucle de rondas, desastres, votación...). Si está bien, pon
+   `APLICAR = true` y ejecútalo otra vez:
+   - tus mapas (de `ServerStorage.Maps`, `Workspace.Maps`... o los que pongas en `MAPAS_SUELTOS`) se mueven a
+     `ServerStorage.IslasMapasPropios`; los que estaban puestos en el Workspace dejan de estar siempre cargados;
+   - si un mapa tuyo se llama igual que uno generado, el tuyo pasa a `Nombre_Propio`. Elige cuál se queda
+     poniendo el otro en `Config.DisabledMaps`;
+   - los scripts viejos detectados se **desactivan** (no se borran). Revisa la lista: si tu tienda o tus datos son
+     mejores que los nuevos, quita ese script de la lista o reactívalo.
+
+Ajustes útiles en `Config`: `CustomMapFolders` (carpetas con mapas propios), `DisabledMaps`, `DisableMapScripts`
+(apaga los scripts que vengan dentro de tus mapas) y `LobbyName` (si tu lobby se llama distinto, se usa el tuyo).
+Si tu juego ya crea `leaderstats`, se reutiliza. En cada mapa propio puedes poner los atributos `Title`,
+`Description`, `Disasters` y `ClockTime`. Los puntos de aparición son las `SpawnLocation`, las piezas cuyo nombre
+empieza por `Spawn` o las que estén en una carpeta `Spawns`.
+
 ## Cómo es una partida
 
 1. **Descanso** en el lobby (tienda, cofre diario, obby con premio, camas elásticas, clasificaciones).

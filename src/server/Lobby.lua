@@ -74,14 +74,14 @@ function Lobby.ShouldBuild()
 		return true
 	end
 	if Config.BuildLobby == "auto" then
-		return workspace:FindFirstChild("Lobby") == nil
+		return workspace:FindFirstChild(Config.LobbyName or "Lobby") == nil
 	end
 	return false
 end
 
 function Lobby.Build()
 	local folder = Instance.new("Folder")
-	folder.Name = "Lobby"
+	folder.Name = Config.LobbyName or "Lobby"
 	local O = Config.LobbyOrigin
 	local b = Util.newBuilder(folder, O)
 

@@ -40,11 +40,54 @@ local lobbySpawns = nil
 local LIGHT_PROPS = { "ClockTime", "Brightness", "Ambient", "OutdoorAmbient", "FogColor", "FogStart", "FogEnd" }
 local ALL_DISASTERS = { "Earthquake", "Fire", "Meteors", "Flood", "Lightning", "Tornado", "AcidRain", "Tsunami", "Volcano", "BlackHole", "UFO", "Virus" }
 
-local function customFolder()
-	return ServerStorage:FindFirstChild("IslasMapasPropios")
+-- Carpetas de ServerStorage con mapas propios (Model o Folder). Ver Config.CustomMapFolders.
+local function customFolders()
+	local list = {}
+	for _, name in ipairs(Config.CustomMapFolders or { "IslasMapasPropios" }) do
+		local f = ServerStorage:FindFirstChild(name)
+		if f then
+			list[#list + 1] = f
+		end
+	end
+	return list
 end
 
+local function findCustom(name)
+	for _, f in ipairs(customFolders()) do
+		local m = f:FindFirstChild(name)
+		if m and (m:IsA("Model") or m:IsA("Folder")) then
+			return m
+		end
+	end
+	return nil
+end
+
+-- Caja que envuelve un Model o una Folder (las Folder no tienen GetBoundingBox)
+local function boundsOf(inst)
+	if inst:IsA("Model") then
+		return inst:GetBoundingBox()
+	end
+	local minV, maxV
+	for _, d in ipairs(inst:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local p, h = d.Position, d.Size / 2
+			local lo, hi = p - h, p + h
+			minV = minV and minV:Min(lo) or lo
+			maxV = maxV and maxV:Max(hi) or hi
+		end
+	end
+	if not minV then
+		return CFrame.new(), Vector3.zero
+	end
+	return CFrame.new((minV + maxV) / 2), maxV - minV
+end
+
+local customCache = {} -- [instancia] = def (calcular la caja de un mapa grande cuesta)
+
 local function customDef(model)
+	if customCache[model] then
+		return customCache[model]
+	end
 	local disasters = ALL_DISASTERS
 	local attr = model:GetAttribute("Disasters")
 	if typeof(attr) == "string" and #attr > 0 then
@@ -56,15 +99,22 @@ local function customDef(model)
 			end
 		end
 	end
-	local _, size = model:GetBoundingBox()
+	local _, size = boundsOf(model)
 	local hx, hz = size.X / 2 + 10, size.Z / 2 + 10
-	return {
+	local lighting
+	if typeof(model:GetAttribute("ClockTime")) == "number" then
+		lighting = { ClockTime = model:GetAttribute("ClockTime") }
+	end
+	local def = {
 		Title = model:GetAttribute("Title") or model.Name,
 		Description = model:GetAttribute("Description") or "Mapa personalizado.",
 		Disasters = disasters,
 		Bounds = { x1 = -hx, x2 = hx, z1 = -hz, z2 = hz, top = size.Y + 40, floor = 0 },
+		Lighting = lighting,
 		Custom = model,
 	}
+	customCache[model] = def
+	return def
 end
 
 local function getDef(name)
@@ -72,8 +122,7 @@ local function getDef(name)
 	if module then
 		return require(module)
 	end
-	local cf = customFolder()
-	local model = cf and cf:FindFirstChild(name)
+	local model = findCustom(name)
 	if model then
 		return customDef(model)
 	end
@@ -83,15 +132,18 @@ MapService.GetDef = getDef
 
 function MapService.GetMapNames()
 	local names = {}
+	local disabled = {}
+	for _, n in ipairs(Config.DisabledMaps or {}) do
+		disabled[n] = true
+	end
 	for _, child in ipairs(Builders:GetChildren()) do
-		if child:IsA("ModuleScript") then
+		if child:IsA("ModuleScript") and not disabled[child.Name] then
 			names[#names + 1] = child.Name
 		end
 	end
-	local cf = customFolder()
-	if cf then
-		for _, child in ipairs(cf:GetChildren()) do
-			if (child:IsA("Model") or child:IsA("Folder")) and not table.find(names, child.Name) then
+	for _, f in ipairs(customFolders()) do
+		for _, child in ipairs(f:GetChildren()) do
+			if (child:IsA("Model") or child:IsA("Folder")) and not table.find(names, child.Name) and not disabled[child.Name] then
 				names[#names + 1] = child.Name
 			end
 		end
@@ -171,22 +223,43 @@ function MapService.Unload()
 end
 
 -- Coloca un modelo propio en el origen del mapa y saca sus puntos de aparicion
+local SPAWN_FOLDERS = { spawns = true, spawnpoints = true, spawnlocations = true, puntosaparicion = true }
+
 local function placeCustom(def, folder, origin)
-	local clone = def.Custom:Clone()
+	-- Se clona desde ServerStorage: el original nunca entra en el workspace
+	local source = def.Custom
+	local clone
+	if source:IsA("Model") then
+		clone = source:Clone()
+	else
+		clone = Instance.new("Model")
+		clone.Name = source.Name
+		for _, child in ipairs(source:GetChildren()) do
+			local c = child:Clone()
+			if c then
+				c.Parent = clone
+			end
+		end
+	end
 	local cf, size = clone:GetBoundingBox()
 	local bottom = cf.Position - Vector3.new(0, size.Y / 2, 0)
-	for _, d in ipairs(clone:GetDescendants()) do
-		if d:IsA("BasePart") then
-			d.Position = d.Position - bottom + origin
+	-- PivotTo mueve todo junto (tambien piezas soldadas)
+	clone:PivotTo(clone:GetPivot() + (origin - bottom))
+	if Config.DisableMapScripts then
+		for _, d in ipairs(clone:GetDescendants()) do
+			if d:IsA("Script") or d:IsA("LocalScript") then
+				d.Disabled = true
+			end
 		end
 	end
 	clone.Parent = folder
 	local spawns = {}
 	for _, d in ipairs(clone:GetDescendants()) do
+		local inSpawnFolder = d.Parent and SPAWN_FOLDERS[string.lower(d.Parent.Name)]
 		if d:IsA("SpawnLocation") then
 			d.Enabled = false
 			spawns[#spawns + 1] = d
-		elseif d:IsA("BasePart") and (d.Name == "Spawn" or d.Name == "SpawnPoint") then
+		elseif d:IsA("BasePart") and (inSpawnFolder or string.lower(d.Name):match("^spawn")) then
 			d.Transparency = 1
 			d.CanCollide = false
 			spawns[#spawns + 1] = d
@@ -287,7 +360,7 @@ local function findLobbySpawns()
 		end
 	end
 	local found = {}
-	local lobby = workspace:FindFirstChild("Lobby")
+	local lobby = workspace:FindFirstChild(Config.LobbyName or "Lobby")
 	local scope = lobby or workspace
 	for _, inst in ipairs(scope:GetDescendants()) do
 		if inst:IsA("SpawnLocation") and not (current and inst:IsDescendantOf(current.Folder)) then

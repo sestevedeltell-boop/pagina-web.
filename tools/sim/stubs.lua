@@ -498,6 +498,9 @@ local function defaultsFor(class, p)
 		p.Playing = false
 		p.TimeLength = 1
 		p.IsLoaded = true
+	elseif class == "Script" or class == "LocalScript" then
+		p.Disabled = false
+		p.Source = ""
 	elseif class == "Tool" then
 		p.Enabled = true
 		p.RequiresHandle = true
@@ -1445,6 +1448,8 @@ local TeleportService = service("TeleportService")
 local MessagingService = service("MessagingService")
 function methods.SubscribeAsync() return { Disconnect = function() end } end
 function methods.PublishAsync() end
+local ChangeHistoryService = service("ChangeHistoryService")
+function methods.SetWaypoint() end
 local AnalyticsService = service("AnalyticsService")
 function methods.LogCustomEvent() end
 function methods.LogEconomyEvent() end

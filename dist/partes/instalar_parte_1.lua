@@ -156,6 +156,17 @@ return {
 	-- Lobby propio: "auto" = solo si en workspace no hay ya una carpeta/modelo llamado "Lobby"
 	BuildLobby = "auto",
 	LobbyOrigin = Vector3.new(-6000, 400, 0),
+	-- Nombre del lobby en el workspace (si tu juego ya tiene uno con otro nombre, ponlo aqui)
+	LobbyName = "Lobby",
+
+	-- ===== Mapas propios (los de tu otro juego) =====
+	-- Carpetas de ServerStorage cuyos Model/Folder son mapas votables. Solo se clonan al workspace cuando ganan
+	-- la votacion y se borran al terminar la ronda.
+	CustomMapFolders = { "IslasMapasPropios" },
+	-- Mapas que no quieres que salgan (por nombre), por ejemplo uno generado que este repetido con uno tuyo
+	DisabledMaps = {},
+	-- true = desactiva los scripts que traigan dentro tus mapas (por si llevan logica vieja de rondas/desastres)
+	DisableMapScripts = false,
 
 	-- ===== Rondas =====
 	RunDefaultLoop = true, -- false si quieres llevar tu propio bucle (ver README)
