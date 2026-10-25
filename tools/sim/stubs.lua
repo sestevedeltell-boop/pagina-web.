@@ -114,7 +114,13 @@ spawn = task.spawn
 delay = task.delay
 tick = function() return VCLOCK end
 time = function() return VCLOCK end
-warn = function(...) print("WARN:", ...) end
+WARNINGS = {}
+warn = function(...)
+	local parts = {}
+	for i = 1, select("#", ...) do parts[#parts + 1] = tostring(select(i, ...)) end
+	WARNINGS[#WARNINGS + 1] = table.concat(parts, " ")
+	print("WARN: " .. table.concat(parts, " "))
+end
 
 -- =====================================================================
 -- Senales

@@ -131,7 +131,8 @@ test("partida", function()
 	d1.Coins = 3000
 	ok = Shop:InvokeServer("buy", "Escudo")
 	check(ok, "no compro escudo")
-	check(d1.Coins == 500, "no cobro bien el escudo (" .. d1.Coins .. ")")
+	check(d1.Coins == 650, "no cobro bien el escudo (" .. d1.Coins .. "): 3000 - 2500 + 150 del logro De compras")
+	check(d1.Achievements.Comprador ~= nil, "no dio el logro De compras")
 	_G.LOCAL_PLAYER = nil
 
 	-- recompensa diaria

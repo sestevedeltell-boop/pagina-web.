@@ -205,7 +205,7 @@ function UI.Window(gui, title, size, accent)
 		Parent = win,
 	})
 	UI.Corner(bar, 12)
-	UI.Label(bar, {
+	local titleLabel = UI.Label(bar, {
 		Text = title,
 		Font = T.Black,
 		TextSize = 24,
@@ -254,7 +254,7 @@ function UI.Window(gui, title, size, accent)
 		return win.Visible
 	end
 	close.Activated:Connect(api.Close)
-	api.Frame, api.Content = win, content
+	api.Frame, api.Content, api.Title = win, content, titleLabel
 	openWindows[#openWindows + 1] = api
 	return api
 end
