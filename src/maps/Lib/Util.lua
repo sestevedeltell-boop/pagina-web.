@@ -31,7 +31,10 @@ Util.Colors = {
 	Water = C(40, 110, 175),
 }
 
-local YIELD_EVERY = 80 -- cada tantas piezas se cede el hilo para no congelar el servidor
+-- Tiempo maximo seguido construyendo antes de ceder el hilo (para no congelar el servidor)
+Util.BuildBudget = 0.006
+-- Tamano maximo de cada trozo de pared/suelo: las paredes grandes se trocean para que se rompan por partes
+Util.ChunkSize = 12
 
 local Builder = {}
 Builder.__index = Builder
@@ -69,7 +72,8 @@ function Builder:At(offset, name, className)
 end
 
 -- Pieza basica. size/pos son Vector3 (pos = centro, relativo al origen)
--- opts: shape, transparency, canCollide, rot (grados, Vector3), velocity, reflectance
+-- opts: shape, transparency, canCollide, rot (grados, Vector3), velocity, reflectance,
+--       touch (true = puede disparar Touched), indestructible (no se rompe con los desastres)
 function Builder:Box(name, size, pos, color, material, opts)
 	opts = opts or {}
 	local p = Instance.new("Part")
@@ -90,6 +94,16 @@ function Builder:Box(name, size, pos, color, material, opts)
 	if opts.reflectance then
 		p.Reflectance = opts.reflectance
 	end
+	-- rendimiento: las piezas del mapa no necesitan eventos Touched, y las pequenas no necesitan sombra
+	if not opts.touch then
+		p.CanTouch = false
+	end
+	if math.max(size.X, size.Y, size.Z) < 3 then
+		p.CastShadow = false
+	end
+	if opts.indestructible then
+		p:SetAttribute("Indestructible", true)
+	end
 	local cf = CFrame.new(self.origin + pos)
 	if opts.rot then
 		cf = cf * CFrame.Angles(math.rad(opts.rot.X), math.rad(opts.rot.Y), math.rad(opts.rot.Z))
@@ -102,18 +116,55 @@ function Builder:Box(name, size, pos, color, material, opts)
 
 	local s = self.state
 	s.count = s.count + 1
-	if s.count % YIELD_EVERY == 0 then
+	if os.clock() - (s.lastYield or 0) > Util.BuildBudget then
 		task.wait()
+		s.lastYield = os.clock()
 	end
 	return p
 end
 
--- Columna vertical redonda
+-- Como Box pero troceando en bloques de como mucho Util.ChunkSize (solo piezas sin rotar).
+-- Asi una pared de 80 studs no se rompe entera de golpe sino por trozos.
+function Builder:Chunked(name, size, pos, color, material, opts)
+	local c = Util.ChunkSize
+	local function count(v)
+		return v > c * 1.25 and math.ceil(v / c) or 1
+	end
+	local nx, ny, nz = count(size.X), count(size.Y), count(size.Z)
+	if nx * ny * nz == 1 then
+		return self:Box(name, size, pos, color, material, opts)
+	end
+	local sx, sy, sz = size.X / nx, size.Y / ny, size.Z / nz
+	local x0 = pos.X - size.X / 2 + sx / 2
+	local y0 = pos.Y - size.Y / 2 + sy / 2
+	local z0 = pos.Z - size.Z / 2 + sz / 2
+	local first
+	for i = 0, nx - 1 do
+		for j = 0, ny - 1 do
+			for k = 0, nz - 1 do
+				local part = self:Box(name, V(sx, sy, sz), V(x0 + i * sx, y0 + j * sy, z0 + k * sz), color, material, opts)
+				first = first or part
+			end
+		end
+	end
+	return first
+end
+
+-- Columna vertical redonda (las altas se trocean para que puedan romperse por tramos)
 function Builder:Pillar(name, x, z, y1, y2, diameter, color, material)
-	return self:Box(name, V(y2 - y1, diameter, diameter), V(x, (y1 + y2) / 2, z), color, material, {
-		shape = Enum.PartType.Cylinder,
-		rot = V(0, 0, 90),
-	})
+	local h = y2 - y1
+	local n = h > Util.ChunkSize * 1.5 and math.ceil(h / (Util.ChunkSize * 1.5)) or 1
+	local seg = h / n
+	local first
+	for i = 0, n - 1 do
+		local a = y1 + i * seg
+		local part = self:Box(name, V(seg, diameter, diameter), V(x, a + seg / 2, z), color, material, {
+			shape = Enum.PartType.Cylinder,
+			rot = V(0, 0, 90),
+		})
+		first = first or part
+	end
+	return first
 end
 
 function Builder:Ball(name, diameter, pos, color, material)
@@ -150,7 +201,7 @@ function Builder:Wall(name, axis, fixed, a1, a2, y1, y2, th, color, material, op
 		if useMat == M.Glass and transp == nil then
 			transp = 0.55 -- el cristal siempre es translucido
 		end
-		self:Box(segName or name, size, pos, segColor or color, useMat, { transparency = transp })
+		self:Chunked(segName or name, size, pos, segColor or color, useMat, { transparency = transp })
 	end
 
 	local cursor = a1
@@ -211,7 +262,7 @@ function Builder:Slab(name, x1, x2, z1, z2, ytop, th, color, material, holes)
 		rects = out
 	end
 	for _, r in ipairs(rects) do
-		self:Box(
+		self:Chunked(
 			name,
 			V(r[2] - r[1], th, r[4] - r[3]),
 			V((r[1] + r[2]) / 2, ytop - th / 2, (r[3] + r[4]) / 2),
@@ -250,6 +301,7 @@ function Builder:Ladder(name, x, z, y1, y2)
 	t.Anchored = true
 	t.Size = V(2, y2 - y1, 2)
 	t.CFrame = CFrame.new(self.origin + V(x, (y1 + y2) / 2, z))
+	t.CanTouch = false
 	t.Parent = self.parent
 	self.state.count = self.state.count + 1
 	return t
@@ -294,6 +346,7 @@ function Builder:Spawn(pos)
 	local p = self:Box("SpawnPoint", V(4, 1, 4), pos, Util.Colors.White, M.SmoothPlastic, {
 		transparency = 1,
 		canCollide = false,
+		indestructible = true,
 	})
 	local list = self.state.spawns
 	list[#list + 1] = p
@@ -306,7 +359,10 @@ function Builder:Sea(y, extent, color, transparency)
 	local p = self:Box("Mar", V(extent, 2, extent), V(0, y - 1, 0), color or Util.Colors.Water, M.SmoothPlastic, {
 		transparency = transparency or 0.15,
 		canCollide = false,
+		touch = true,
+		indestructible = true,
 	})
+	p.CastShadow = false
 	p.Touched:Connect(function(hit)
 		local hum = hit.Parent and hit.Parent:FindFirstChildOfClass("Humanoid")
 		if hum and hum.Health > 0 then
@@ -319,6 +375,14 @@ end
 -- Plano de muerte invisible (vacio): tocarlo mata al jugador
 function Builder:KillPlane(y, extent)
 	return self:Sea(y, extent, Util.Colors.DarkMetal, 1)
+end
+
+-- Marca un modelo para que los clientes lo hagan girar (sin coste para el servidor).
+-- axis = "X", "Y" o "Z"; rpm = vueltas por minuto. El giro es alrededor del centro del modelo.
+function Builder:Spin(model, rpm, axis)
+	model:SetAttribute("GiroRPM", rpm)
+	model:SetAttribute("GiroEje", axis or "Y")
+	game:GetService("CollectionService"):AddTag(model, "IslasGira")
 end
 
 -- Abeto simple (tronco + 3 pisos)

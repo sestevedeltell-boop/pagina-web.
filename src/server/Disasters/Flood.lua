@@ -1,17 +1,15 @@
-local RisingLiquid = require(script.Parent.Parent.RisingLiquid)
+-- Inundacion: el agua sube hasta la altura que diga el mapa. Abajo te ahogas poco a poco.
+local Hazards = require(script.Parent.Parent.Hazards)
 
 return {
-	Title = "Inundacion",
-	Description = "El agua sube sin parar. Busca un lugar alto: abajo te ahogas.",
 	Run = function(ctx)
-		RisingLiquid.run(ctx, {
-			name = "Inundacion",
+		Hazards.Liquid(ctx, {
 			color = Color3.fromRGB(40, 120, 200),
-			material = Enum.Material.SmoothPlastic,
-			transparency = 0.4,
+			material = "SmoothPlastic",
+			transparency = 0.35,
 			maxHeight = 40,
 			lethal = false,
-			dps = 14,
+			dps = 15,
 		})
 	end,
 }

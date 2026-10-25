@@ -1,17 +1,27 @@
+-- Lluvia acida: quema a quien este a cielo abierto (el paraguas protege) y corroe los tejados poco a poco,
+-- abriendo agujeros: los refugios dejan de ser seguros con el tiempo.
 return {
-	Title = "Lluvia acida",
-	Description = "Llueve acido: quema a quien este a cielo abierto. ¡Ponte bajo techo!",
 	Run = function(ctx)
 		ctx.setLighting({ FogColor = Color3.fromRGB(90, 140, 60), FogEnd = 450, Brightness = 1 })
 		ctx.fx("tint", Color3.fromRGB(80, 200, 60), 0.86)
+		ctx.fx("weather", "acid")
 		local dt = 0.5
+		local corrodeAcc = 0
 		while ctx.active() do
 			for _, entry in ipairs(ctx.players()) do
-				-- si hay algo encima (techo, cristal, balcon) estas a cubierto
-				local origin = entry.root.Position + Vector3.new(0, 2, 0)
-				local cover = workspace:Raycast(origin, Vector3.new(0, 400, 0), ctx.rayParams)
-				if not cover then
-					ctx.damage(entry, (ctx.config.dps or 7) * dt)
+				if not ctx.holding(entry, "Paraguas") and not ctx.covered(entry) then
+					ctx.damage(entry, (ctx.config.dps or 7) * dt * ctx.intensity)
+				end
+			end
+			corrodeAcc = corrodeAcc + dt
+			if corrodeAcc >= 0.6 then
+				corrodeAcc = 0
+				for _ = 1, math.ceil(3 * ctx.intensity) do
+					local x, z = ctx.randomPoint()
+					local part = ctx.D.RandomTopPart(x, z, ctx.bounds.top + 40)
+					if part then
+						ctx.D.Damage(part, 30, nil, { shatter = true })
+					end
 				end
 			end
 			task.wait(dt)

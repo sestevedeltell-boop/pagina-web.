@@ -1,10 +1,10 @@
-local ZoneHazard = require(script.Parent.Parent.ZoneHazard)
+-- Fuga de radiacion: nubes verdes que aparecen y crecen. No rompen nada pero hacen dano dentro.
+local Hazards = require(script.Parent.Parent.Hazards)
 
 return {
-	Title = "Fuga de radiacion",
-	Description = "Nubes radiactivas verdes recorren la estación. No te quedes dentro.",
 	Run = function(ctx)
-		ZoneHazard.run(ctx, {
+		ctx.setLighting({ Ambient = Color3.fromRGB(70, 110, 60) })
+		Hazards.Zones(ctx, {
 			color = Color3.fromRGB(110, 255, 80),
 			fire = false,
 			dps = 11,

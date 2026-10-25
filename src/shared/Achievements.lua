@@ -1,0 +1,27 @@
+-- Achievements: logros. Stat = estadistica del jugador que se compara con Goal.
+-- Las estadisticas viven en PlayerData (Stats) y se actualizan en Rewards.
+return {
+	{ Id = "Primera", Name = "Primera vez", Desc = "Sobrevive a tu primera ronda", Stat = "Wins", Goal = 1, Reward = 25 },
+	{ Id = "Diez", Name = "Duro de pelar", Desc = "Sobrevive 10 rondas", Stat = "Wins", Goal = 10, Reward = 100 },
+	{ Id = "Cincuenta", Name = "Superviviente nato", Desc = "Sobrevive 50 rondas", Stat = "Wins", Goal = 50, Reward = 400 },
+	{ Id = "Doscientas", Name = "Leyenda viva", Desc = "Sobrevive 200 rondas", Stat = "Wins", Goal = 200, Reward = 1500 },
+	{ Id = "Racha5", Name = "En racha", Desc = "Consigue una racha de 5 rondas", Stat = "BestStreak", Goal = 5, Reward = 150 },
+	{ Id = "Racha10", Name = "Imparable", Desc = "Consigue una racha de 10 rondas", Stat = "BestStreak", Goal = 10, Reward = 500 },
+	{ Id = "Racha25", Name = "Inmortal", Desc = "Consigue una racha de 25 rondas", Stat = "BestStreak", Goal = 25, Reward = 2000 },
+	{ Id = "Jugadas25", Name = "Habitual", Desc = "Juega 25 rondas", Stat = "Rounds", Goal = 25, Reward = 100 },
+	{ Id = "Jugadas100", Name = "Adicto a los desastres", Desc = "Juega 100 rondas", Stat = "Rounds", Goal = 100, Reward = 500 },
+	{ Id = "Rico", Name = "Hucha llena", Desc = "Gana 1.000 monedas en total", Stat = "CoinsEarned", Goal = 1000, Reward = 100 },
+	{ Id = "Millonario", Name = "Magnate", Desc = "Gana 20.000 monedas en total", Stat = "CoinsEarned", Goal = 20000, Reward = 1000 },
+	{ Id = "Nivel10", Name = "Nivel 10", Desc = "Llega al nivel 10", Stat = "Level", Goal = 10, Reward = 200 },
+	{ Id = "Nivel25", Name = "Nivel 25", Desc = "Llega al nivel 25", Stat = "Level", Goal = 25, Reward = 750 },
+	{ Id = "Turista", Name = "Turista", Desc = "Sobrevive en 5 mapas distintos", Stat = "MapsSurvived", Goal = 5, Reward = 200 },
+	{ Id = "Trotamundos", Name = "Trotamundos", Desc = "Sobrevive en 10 mapas distintos", Stat = "MapsSurvived", Goal = 10, Reward = 600 },
+	{ Id = "Cazador", Name = "Cazador de desastres", Desc = "Sobrevive a 8 desastres distintos", Stat = "DisastersSurvived", Goal = 8, Reward = 300 },
+	{ Id = "Coleccionista", Name = "Coleccionista", Desc = "Sobrevive a 15 desastres distintos", Stat = "DisastersSurvived", Goal = 15, Reward = 1200 },
+	{ Id = "Solitario", Name = "El ultimo en pie", Desc = "Se el unico superviviente de una ronda con 3+ jugadores", Stat = "SoleSurvivor", Goal = 1, Reward = 300 },
+	{ Id = "Doble", Name = "Doble o nada", Desc = "Sobrevive a una ronda con dos desastres", Stat = "DoubleSurvived", Goal = 1, Reward = 200 },
+	{ Id = "Recolector", Name = "Recolector", Desc = "Recoge 200 monedas del mapa", Stat = "CoinsPicked", Goal = 200, Reward = 250 },
+	{ Id = "Comprador", Name = "De compras", Desc = "Compra 5 cosas en la tienda", Stat = "Purchases", Goal = 5, Reward = 150 },
+	{ Id = "Parkour", Name = "Parkour", Desc = "Completa el obby del lobby", Stat = "ObbyCompleted", Goal = 1, Reward = 100 },
+	{ Id = "Fiel", Name = "Fiel", Desc = "Reclama la recompensa diaria 7 dias seguidos", Stat = "DailyStreak", Goal = 7, Reward = 500 },
+}

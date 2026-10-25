@@ -12,7 +12,7 @@ local Skyscraper = {
 	Description = "Torre de 12 plantas con 3 ascensores, escalera de emergencia, helipuerto y piscina en la azotea.",
 	Lighting = { ClockTime = 17.5, Brightness = 2, OutdoorAmbient = C(120, 110, 130) },
 	Bounds = { x1 = -60, x2 = 60, z1 = -60, z2 = 100, top = 190, floor = 0 },
-	Disasters = { "Earthquake", "Fire", "Lightning", "AcidRain", "Tornado", "Lava" },
+	Disasters = { "Earthquake", "Fire", "Lightning", "AcidRain", "Tornado", "Lava", "UFO", "Meteors", "Blizzard" },
 	DisasterConfig = { Lava = { maxHeight = 112 } },
 }
 
@@ -76,7 +76,7 @@ function Skyscraper.Build(b)
 	end
 	-- pilares de esquina
 	for _, p in ipairs({ { x1, z1 }, { x1, z2 }, { x2, z1 }, { x2, z2 } }) do
-		tower:Box("PilarEsquina", V(2.4, STORY * (LEVELS - 1), 2.4), V(p[1], STORY * (LEVELS - 1) / 2, p[2]), Colors.DarkMetal, M.Metal)
+		tower:Chunked("PilarEsquina", V(2.4, STORY * (LEVELS - 1), 2.4), V(p[1], STORY * (LEVELS - 1) / 2, p[2]), Colors.DarkMetal, M.Metal)
 	end
 
 	for _, e in ipairs(elevs) do

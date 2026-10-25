@@ -6,10 +6,16 @@
 --
 -- Hueco interior: 12 (X) x 11 (Z). Los agujeros de los forjados de cada planta deben coincidir
 -- con Elevator.hole(cfg), que devuelve {x1, x2, z1, z2}.
+--
+-- Rendimiento: la cabina tiene pocas piezas (se mueve entera cada frame). Dentro hay un unico boton
+-- (ProximityPrompt) que abre un menu de plantas en la pantalla del jugador.
+-- Los ascensores no se rompen (Destruction ignora las carpetas *_Hueco y *_Cabina).
 
 local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Util = require(script.Parent.Util)
+local Net = require(ReplicatedStorage:WaitForChild("IslasShared"):WaitForChild("Net"))
 local V, C, M = Util.V, Util.C, Util.M
 
 local Elevator = {}
@@ -18,7 +24,27 @@ local SHAFT_W, SHAFT_D = 12, 11 -- hueco interior
 local CAB = 9 -- lado de la cabina
 local DOOR_W, DOOR_H = 6, 8 -- hueco de la puerta
 local WALL = 0.6
-local SPEED = 14 -- studs por segundo
+local SPEED = 16 -- studs por segundo
+
+local registry = {} -- [id] = { request, labels, cabin, state }
+local nextId = 0
+
+local MenuEvent = Net.Event("ElevatorMenu")
+local RequestEvent = Net.Event("ElevatorRequest")
+
+RequestEvent.OnServerEvent:Connect(function(player, id, floor)
+	local e = registry[id]
+	if not e or typeof(floor) ~= "number" or floor ~= math.floor(floor) or floor < 1 or floor > #e.labels then
+		return
+	end
+	-- solo si el jugador esta dentro o cerca de la cabina
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not hrp or not e.cabin.Parent or (hrp.Position - e.cabin:GetPivot().Position).Magnitude > 20 then
+		return
+	end
+	e.request(floor)
+end)
 
 -- Rectangulo (x1, x2, z1, z2) que hay que dejar vacio en cada forjado
 function Elevator.hole(cfg)
@@ -33,10 +59,9 @@ function Elevator.build(b, cfg)
 	local wallColor = cfg.wallColor or Util.Colors.Concrete
 	local wallMat = cfg.wallMaterial or M.Concrete
 	local metal = Util.Colors.Metal
-	local labels = cfg.labels or {}
-
-	local function label(i)
-		return labels[i] or tostring(i)
+	local labels = {}
+	for i = 1, count do
+		labels[i] = (cfg.labels and cfg.labels[i]) or tostring(i)
 	end
 
 	local shaft = b:Group(cfg.name .. "_Hueco")
@@ -63,22 +88,20 @@ function Elevator.build(b, cfg)
 	for _, side in ipairs({ -1, 1 }) do
 		shaft:Box("PilarPuerta", V(pillarW, sH, WALL), V(cx + side * (DOOR_W / 2 + pillarW / 2), sMid, frontZ), wallColor, wallMat)
 	end
-	-- panel sobre la puerta de cada planta (hasta la planta siguiente o el techo)
 	for i = 1, count do
 		local from = floors[i] + DOOR_H
 		local to = floors[i + 1] or sTop
 		if to > from then
 			shaft:Box("PanelPuerta", V(DOOR_W, to - from, WALL), V(cx, (from + to) / 2, frontZ), wallColor, wallMat)
 		end
-		-- indicador de planta sobre la puerta
 		if floors[i + 1] == nil or floors[i + 1] - from > 1.4 then
-			shaft:Board("Indicador", label(i), V(2.2, 0.9, 0.2), V(cx, from + 0.7, frontZ + WALL / 2 + 0.1), Util.Colors.DarkMetal, C(120, 255, 140))
+			shaft:Board("Indicador", labels[i], V(2.2, 0.9, 0.2), V(cx, from + 0.7, frontZ + WALL / 2 + 0.1), Util.Colors.DarkMetal, C(120, 255, 140))
 		end
 	end
 
-	-- ===== Cabina (se mueve como modelo) =====
+	-- ===== Cabina (se mueve como modelo: pocas piezas) =====
 	local cabin = b:Group(cfg.name .. "_Cabina", "Model")
-	local cabZ = cz + 0.9 -- centro de la cabina: su frente queda casi a ras del borde del hueco
+	local cabZ = cz + 0.9 -- su frente queda casi a ras del borde del hueco
 	local cabFront = cabZ + CAB / 2
 	local cabSide = cfg.glass and M.Glass or M.Metal
 	local cabSideT = cfg.glass and 0.5 or nil
@@ -91,34 +114,28 @@ function Elevator.build(b, cfg)
 	for _, side in ipairs({ -1, 1 }) do
 		cabin:Box("LateralCabina", V(0.4, CAB, CAB), V(cx + side * (CAB / 2 + 0.2), y0 + CAB / 2, cabZ), metal, cabSide, { transparency = cabSideT })
 	end
-	-- frente de la cabina: pilares + dintel
 	local cabPillar = (CAB + 0.8 - DOOR_W) / 2
 	for _, side in ipairs({ -1, 1 }) do
 		cabin:Box("PilarCabina", V(cabPillar, DOOR_H, 0.4), V(cx + side * (DOOR_W / 2 + cabPillar / 2), y0 + DOOR_H / 2, cabFront - 0.2), metal, M.Metal)
 	end
 	cabin:Box("DintelCabina", V(CAB + 0.8, CAB - DOOR_H, 0.4), V(cx, y0 + DOOR_H + (CAB - DOOR_H) / 2, cabFront - 0.2), metal, M.Metal)
 
-	-- puertas de la cabina
 	local doorW = DOOR_W / 2
 	local cabDoors = {}
 	for k, side in ipairs({ -1, 1 }) do
 		cabDoors[k] = cabin:Box("PuertaCabina", V(doorW, DOOR_H, 0.3), V(cx + side * doorW / 2, y0 + DOOR_H / 2, cabFront + 0.15), C(200, 205, 210), M.Metal)
 	end
 
-	-- botonera interior (clic en cada numero). Dos o tres columnas si hay muchas plantas.
-	cabin:Box("Botonera", V(0.2, 6.2, 2.9), V(cx - CAB / 2 + 0.05, y0 + 4.2, cabZ + 1.4), Util.Colors.DarkMetal, M.Metal)
-	local rowsPerCol = 6
-	local buttons = {}
-	for i = 1, count do
-		local col = math.floor((i - 1) / rowsPerCol)
-		local row = (i - 1) % rowsPerCol
-		local btn = cabin:Box("Boton" .. i, V(0.2, 0.8, 0.8), V(cx - CAB / 2 + 0.2, y0 + 1.6 + row * 0.95, cabZ + 2.3 - col * 0.95), C(40, 40, 45), M.SmoothPlastic)
-		cabin:Sign(btn, label(i), Enum.NormalId.Right, C(255, 255, 255))
-		local cd = Instance.new("ClickDetector")
-		cd.MaxActivationDistance = 14
-		cd.Parent = btn
-		buttons[i] = { part = btn, click = cd }
-	end
+	-- botonera: un solo boton que abre el menu de plantas
+	local panel = cabin:Board("Botonera", "▲▼", V(0.3, 2.2, 1.6), V(cx - CAB / 2 + 0.15, y0 + 4.4, cabZ + 2.3), Util.Colors.DarkMetal, C(120, 255, 140), Enum.NormalId.Right)
+	local panelPrompt = Instance.new("ProximityPrompt")
+	panelPrompt.ActionText = count == 2 and "Ir a la otra planta" or "Elegir planta"
+	panelPrompt.ObjectText = "Ascensor"
+	panelPrompt.HoldDuration = 0
+	panelPrompt.MaxActivationDistance = 9
+	panelPrompt.RequiresLineOfSight = false
+	panelPrompt.Parent = panel
+
 	cabin.parent.PrimaryPart = floorPart
 
 	-- ===== Puertas de cada planta =====
@@ -159,12 +176,13 @@ function Elevator.build(b, cfg)
 
 	local function travel(idx)
 		local fromY, toY = floors[st.floor], floors[idx]
-		local pivot = cabin.parent:GetPivot()
+		local model = cabin.parent
+		local pivot = model:GetPivot()
 		local cfv = Instance.new("CFrameValue")
 		cfv.Value = pivot
 		local conn = cfv.Changed:Connect(function(v)
 			if st.alive then
-				cabin.parent:PivotTo(v)
+				model:PivotTo(v)
 			end
 		end)
 		local t = math.max(1.5, math.abs(toY - fromY) / SPEED)
@@ -175,6 +193,9 @@ function Elevator.build(b, cfg)
 		tw.Completed:Wait()
 		conn:Disconnect()
 		cfv:Destroy()
+		if st.alive then
+			model:PivotTo(pivot + Vector3.new(0, toY - fromY, 0))
+		end
 		st.floor = idx
 	end
 
@@ -189,7 +210,7 @@ function Elevator.build(b, cfg)
 				travel(idx)
 			end
 			setDoors(true)
-			task.wait(5)
+			task.wait(4)
 		end
 		if st.alive then
 			setDoors(false)
@@ -216,12 +237,16 @@ function Elevator.build(b, cfg)
 		end
 	end
 
-	-- botones de llamada en cada planta (ProximityPrompt) y de cabina (ClickDetector)
+	nextId = nextId + 1
+	local id = nextId
+	registry[id] = { request = request, labels = labels, cabin = cabin.parent, state = st }
+
+	-- botones de llamada en cada planta
 	for i = 1, count do
 		local call = shaft:Box("BotonLlamada", V(0.7, 1, 0.3), V(cx + DOOR_W / 2 + 1, floors[i] + 3.5, frontZ + WALL / 2 + 0.15), C(255, 190, 60), M.Neon)
 		local pp = Instance.new("ProximityPrompt")
 		pp.ActionText = "Llamar ascensor"
-		pp.ObjectText = "Planta " .. label(i)
+		pp.ObjectText = "Planta " .. labels[i]
 		pp.HoldDuration = 0
 		pp.MaxActivationDistance = 8
 		pp.RequiresLineOfSight = false
@@ -229,21 +254,26 @@ function Elevator.build(b, cfg)
 		pp.Triggered:Connect(function()
 			request(i)
 		end)
-		buttons[i].click.MouseClick:Connect(function()
-			request(i)
-		end)
 	end
+
+	panelPrompt.Triggered:Connect(function(player)
+		if count == 2 then
+			request(st.floor == 1 and 2 or 1)
+		else
+			MenuEvent:FireClient(player, id, labels, st.floor)
+		end
+	end)
 
 	cabin.parent.Destroying:Connect(function()
 		st.alive = false
+		registry[id] = nil
 	end)
 
-	-- la planta inferior arranca con las puertas abiertas
 	task.defer(function()
 		request(1)
 	end)
 
-	return { Cabin = cabin.parent, Request = request }
+	return { Cabin = cabin.parent, Request = request, Id = id }
 end
 
 return Elevator

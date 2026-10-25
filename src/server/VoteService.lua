@@ -1,22 +1,22 @@
--- VoteService: votacion de mapa al terminar la ronda.
---   local winner = VoteService.Run(options, seconds)   -- options = { "Airport", "Mall", ... }
--- Bloquea hasta que acaba el tiempo y devuelve el nombre del mapa ganador.
-
+-- VoteService: votacion de mapa entre rondas.
+--   local winner = VoteService.Run(VoteService.PickOptions(3), segundos)
+-- Bloquea hasta que acaba el tiempo (o hasta que han votado todos) y devuelve el nombre del mapa ganador.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Net = require(ReplicatedStorage:WaitForChild("IslasShared"):WaitForChild("Net"))
 local MapService = require(script.Parent.MapService)
 local DisasterService = require(script.Parent.DisasterService)
 
-local Remotes = ReplicatedStorage:WaitForChild("IslasRemotes")
-local VoteOptions = Remotes:WaitForChild("VoteOptions") -- servidor -> clientes: {options, endTime}
-local VoteUpdate = Remotes:WaitForChild("VoteUpdate") -- servidor -> clientes: {nombre = votos}
-local VoteEnd = Remotes:WaitForChild("VoteEnd") -- servidor -> clientes: ganador
-local CastVote = Remotes:WaitForChild("CastVote") -- cliente -> servidor: nombre
+local VoteOptions = Net.Event("VoteOptions")
+local VoteUpdate = Net.Event("VoteUpdate")
+local VoteEnd = Net.Event("VoteEnd")
+local CastVote = Net.Event("CastVote")
 
 local VoteService = {}
 
-local active = nil -- { options = set, votes = { [userId] = nombre } }
+local active = nil -- { set, list, votes = { [userId] = nombre } }
+local lastWinner = nil
 
 local function tally(options)
 	local counts = {}
@@ -46,9 +46,15 @@ Players.PlayerRemoving:Connect(function(player)
 	end
 end)
 
--- Elige `n` mapas distintos al azar
+-- Elige `n` mapas distintos al azar (sin repetir el ultimo jugado si hay suficientes)
 function VoteService.PickOptions(n)
 	local names = MapService.GetMapNames()
+	if #names > n and lastWinner then
+		local i = table.find(names, lastWinner)
+		if i then
+			table.remove(names, i)
+		end
+	end
 	for i = #names, 2, -1 do
 		local j = math.random(i)
 		names[i], names[j] = names[j], names[i]
@@ -67,8 +73,11 @@ function VoteService.Run(options, seconds)
 		set[name] = true
 		local info = MapService.GetInfo(name)
 		info.DisasterTitles = {}
+		info.DisasterIcons = {}
 		for _, d in ipairs(info.Disasters) do
-			info.DisasterTitles[#info.DisasterTitles + 1] = DisasterService.TitleOf(d)
+			local di = DisasterService.Info(d)
+			info.DisasterTitles[#info.DisasterTitles + 1] = di.Title
+			info.DisasterIcons[#info.DisasterIcons + 1] = di.Icon
 		end
 		infos[#infos + 1] = info
 	end
@@ -78,7 +87,17 @@ function VoteService.Run(options, seconds)
 	VoteOptions:FireAllClients(infos, endTime)
 	VoteUpdate:FireAllClients(tally(options))
 
-	task.wait(seconds)
+	-- termina antes si ya han votado todos (y hay mas de uno)
+	while workspace:GetServerTimeNow() < endTime do
+		task.wait(0.25)
+		local n, voted = #Players:GetPlayers(), 0
+		for _ in pairs(active.votes) do
+			voted = voted + 1
+		end
+		if n > 1 and voted >= n and endTime - workspace:GetServerTimeNow() > 2 then
+			endTime = workspace:GetServerTimeNow() + 2
+		end
+	end
 
 	local counts = tally(options)
 	local best, bestCount = {}, -1
@@ -92,7 +111,8 @@ function VoteService.Run(options, seconds)
 	local winner = best[math.random(#best)]
 
 	active = nil
-	VoteEnd:FireAllClients(winner)
+	lastWinner = winner
+	VoteEnd:FireAllClients(winner, MapService.GetInfo(winner).Title)
 	return winner
 end
 

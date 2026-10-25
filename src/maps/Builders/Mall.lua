@@ -11,7 +11,7 @@ local Mall = {
 	Description = "4 plantas con atrio, ascensores de cristal, escaleras, tiendas, fuente y cine.",
 	Lighting = { ClockTime = 12, Brightness = 2 },
 	Bounds = { x1 = -110, x2 = 110, z1 = -90, z2 = 150, top = 80, floor = 0 },
-	Disasters = { "Earthquake", "Fire", "Meteors", "AcidRain", "Lava" },
+	Disasters = { "Earthquake", "Fire", "Meteors", "AcidRain", "Lava", "Virus", "BlackHole", "Volcano" },
 	DisasterConfig = { Lava = { maxHeight = 40 } }, -- hay que llegar a la ultima planta
 }
 

@@ -1,17 +1,16 @@
-local RisingLiquid = require(script.Parent.Parent.RisingLiquid)
+-- Lava: sube, derrite lo que toca (los edificios se hunden desde abajo) y mata al instante.
+local Hazards = require(script.Parent.Parent.Hazards)
 
 return {
-	Title = "Lava",
-	Description = "¡El suelo es lava! Sube: tocarla es morir al instante.",
 	Run = function(ctx)
-		RisingLiquid.run(ctx, {
-			name = "Lava",
+		ctx.setLighting({ OutdoorAmbient = Color3.fromRGB(150, 90, 60) })
+		Hazards.Liquid(ctx, {
 			color = Color3.fromRGB(255, 90, 20),
-			material = Enum.Material.Neon,
-			transparency = 0.1,
+			material = "Neon",
+			transparency = 0.05,
 			maxHeight = 40,
 			lethal = true,
-			dps = 0,
+			melt = 90,
 		})
 	end,
 }

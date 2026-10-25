@@ -1,10 +1,13 @@
--- DisasterService: lanza un desastre en la isla actual.
---   DisasterService.Start(MapService.GetCurrent(), duracion [, "Earthquake"])  -> { Name, Title, Description }
---   DisasterService.Stop()                                                      -- limpia efectos y restaura la luz
+-- DisasterService: lanza desastres en la isla actual (uno o varios a la vez).
+--   DisasterService.Start(MapService.GetCurrent(), duracion [, "Earthquake" [, opts]])
+--       opts: intensity (1 = normal), delay (segundos de aviso), mystery (oculta el nombre hasta que empieza)
+--       -> { Id, Name, Title, Icon, Description }
+--   DisasterService.StopAll()   -- limpia efectos y restaura la luz (llamalo antes de MapService.Unload)
+--   DisasterService.Pick(current, exclude) -> nombre al azar de los que admite el mapa
 --
--- Cada mapa dice que desastres admite (Disasters = {...}), sus limites (Bounds) y ajustes (DisasterConfig).
--- Los desastres viven en IslasServer/Disasters: cada uno es un ModuleScript { Title, Description, Run(ctx) }.
--- Run(ctx) se ejecuta en su propio hilo y debe hacer un bucle `while ctx.active() do ... end`.
+-- Cada desastre es un ModuleScript en IslasServer/Disasters con Run(ctx). Run se ejecuta en su propio hilo
+-- y hace un bucle `while ctx.active() do ... end`. Los efectos visuales se dibujan en los clientes con ctx.fx
+-- (sin piezas replicadas) y el dano/destruccion se calcula en el servidor.
 
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
@@ -12,14 +15,22 @@ local TweenService = game:GetService("TweenService")
 local ServerStorage = game:GetService("ServerStorage")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Config = require(ReplicatedStorage:WaitForChild("IslasShared"):WaitForChild("Config"))
+local Shared = ReplicatedStorage:WaitForChild("IslasShared")
+local Config = require(Shared:WaitForChild("Config"))
+local DisasterInfo = require(Shared:WaitForChild("DisasterInfo"))
+local Paths = require(Shared:WaitForChild("Paths"))
+local Net = require(Shared:WaitForChild("Net"))
 local Util = require(ServerStorage:WaitForChild("IslasMapas"):WaitForChild("Lib"):WaitForChild("Util"))
-local DisasterFX = ReplicatedStorage:WaitForChild("IslasRemotes"):WaitForChild("DisasterFX")
+local Destruction = require(script.Parent.Destruction)
+local PhysicsBudget = require(script.Parent.PhysicsBudget)
 local Disasters = script.Parent:WaitForChild("Disasters")
+
+local DisasterFX = Net.Event("DisasterFX")
 
 local DisasterService = {}
 
-local active = nil -- el contexto del desastre en curso
+local active = {} -- contextos en curso
+local nextId = 0
 
 function DisasterService.GetNames()
 	local names = {}
@@ -32,52 +43,68 @@ function DisasterService.GetNames()
 	return names
 end
 
-function DisasterService.TitleOf(name)
-	local module = Disasters:FindFirstChild(name)
-	return module and require(module).Title or name
-end
-
-local function inElevator(part, root)
-	local p = part.Parent
-	while p and p ~= root do
-		if p.Name:match("_Cabina$") or p.Name:match("_Hueco$") then
-			return true
-		end
-		p = p.Parent
+function DisasterService.Info(name)
+	local info = DisasterInfo[name]
+	if info then
+		return info
 	end
-	return false
+	return { Title = name, Icon = "⚠️", Desc = "", Color = Color3.new(1, 1, 1) }
 end
 
-local NOT_FRAGILE = { Isla = true, Mar = true, SpawnPoint = true, Roca = true }
+function DisasterService.TitleOf(name)
+	return DisasterService.Info(name).Title
+end
 
-local function buildContext(current, duration, name)
-	local def = current.Def
-	local origin = Config.MapOrigin
-	local b = def.Bounds or { x1 = -100, x2 = 100, z1 = -100, z2 = 100, top = 100, floor = 0 }
+function DisasterService.Pick(current, exclude)
+	local options = {}
+	for _, n in ipairs(current.Def.Disasters or {}) do
+		if n ~= exclude and Disasters:FindFirstChild(n) then
+			options[#options + 1] = n
+		end
+	end
+	if #options == 0 then
+		return nil
+	end
+	return options[math.random(#options)]
+end
+
+function DisasterService.Active()
+	return active
+end
+
+-- Lleva este jugador el gear `name` equipado (en la mano)?
+local function holding(char, name)
+	local tool = char and char:FindFirstChildOfClass("Tool")
+	return tool ~= nil and tool.Name == name
+end
+DisasterService.Holding = holding
+
+local function buildContext(current, duration, name, opts)
+	nextId = nextId + 1
+	local info = DisasterService.Info(name)
 	local ctx = {
-		Util = Util,
+		id = nextId,
 		name = name,
+		info = info,
+		Util = Util,
+		D = Destruction,
+		PB = PhysicsBudget,
+		Paths = Paths,
 		map = current,
 		duration = duration,
-		config = (def.DisasterConfig and def.DisasterConfig[name]) or {},
+		intensity = opts.intensity or 1,
+		config = (current.Def.DisasterConfig and current.Def.DisasterConfig[name]) or {},
 		stopped = false,
-		startTime = workspace:GetServerTimeNow(),
-		bounds = {
-			x1 = origin.X + b.x1,
-			x2 = origin.X + b.x2,
-			z1 = origin.Z + b.z1,
-			z2 = origin.Z + b.z2,
-			top = origin.Y + (b.top or 100),
-			floor = origin.Y + (b.floor or 0),
-		},
+		bounds = current.Bounds,
 	}
+	ctx.startTime = workspace:GetServerTimeNow()
 	ctx.endTime = ctx.startTime + duration
 
 	local folder = Instance.new("Folder")
 	folder.Name = "EfectosDesastre"
 	folder.Parent = workspace
 	ctx.folder = folder
-	ctx.build = Util.newBuilder(folder, Vector3.new(0, 0, 0)) -- posiciones en coordenadas de mundo
+	ctx.build = Util.newBuilder(folder, Vector3.new(0, 0, 0))
 
 	local stopCallbacks = {}
 	function ctx.onStop(fn)
@@ -92,13 +119,16 @@ local function buildContext(current, duration, name)
 		return workspace:GetServerTimeNow() - ctx.startTime
 	end
 	function ctx.progress()
-		return math.clamp(ctx.elapsed() / duration, 0, 1)
+		return math.clamp(ctx.elapsed() / ctx.duration, 0, 1)
 	end
 	function ctx.active()
 		return not ctx.stopped and workspace:GetServerTimeNow() < ctx.endTime
 	end
+	-- intervalo ajustado por intensidad (mas intensidad = mas a menudo)
+	function ctx.rate(seconds)
+		return seconds / ctx.intensity
+	end
 
-	-- Jugadores vivos que estan en la isla (los que esperan en el lobby no cuentan)
 	function ctx.players()
 		local list = {}
 		local bb = ctx.bounds
@@ -110,7 +140,7 @@ local function buildContext(current, duration, name)
 				local pos = root.Position
 				if pos.X > bb.x1 - 60 and pos.X < bb.x2 + 60 and pos.Z > bb.z1 - 60 and pos.Z < bb.z2 + 60
 					and pos.Y > bb.floor - 80 and pos.Y < bb.top + 150 then
-					list[#list + 1] = { player = p, humanoid = hum, root = root }
+					list[#list + 1] = { player = p, humanoid = hum, root = root, char = char }
 				end
 			end
 		end
@@ -118,14 +148,35 @@ local function buildContext(current, duration, name)
 	end
 
 	function ctx.damage(entry, amount)
-		if entry.humanoid.Health > 0 then
+		if entry.humanoid.Health > 0 and amount > 0 then
+			entry.humanoid:SetAttribute("Causa", info.Title)
 			entry.humanoid:TakeDamage(amount)
 		end
+	end
+	function ctx.kill(entry)
+		if entry.humanoid.Health > 0 and not entry.char:FindFirstChildOfClass("ForceField") then
+			entry.humanoid:SetAttribute("Causa", info.Title)
+			entry.humanoid.Health = 0
+		end
+	end
+	function ctx.holding(entry, gear)
+		return holding(entry.char, gear)
 	end
 
 	function ctx.randomPoint()
 		local bb = ctx.bounds
 		return bb.x1 + math.random() * (bb.x2 - bb.x1), bb.z1 + math.random() * (bb.z2 - bb.z1)
+	end
+	-- punto cerca de un jugador al azar (con probabilidad prob) o al azar en el mapa
+	function ctx.targetPoint(prob, spread)
+		local list = ctx.players()
+		if #list > 0 and math.random() < (prob or 0.5) then
+			local p = list[math.random(#list)].root.Position
+			local bb = ctx.bounds
+			local s = spread or 20
+			return math.clamp(p.X + (math.random() - 0.5) * 2 * s, bb.x1, bb.x2), math.clamp(p.Z + (math.random() - 0.5) * 2 * s, bb.z1, bb.z2)
+		end
+		return ctx.randomPoint()
 	end
 
 	local rayParams = RaycastParams.new()
@@ -134,22 +185,25 @@ local function buildContext(current, duration, name)
 	rayParams.RespectCanCollide = true
 	ctx.rayParams = rayParams
 
-	-- Altura de la superficie en (x, z) mirando desde el cielo (nil si no hay nada)
 	function ctx.groundY(x, z)
 		local bb = ctx.bounds
 		local hit = workspace:Raycast(Vector3.new(x, bb.top + 30, z), Vector3.new(0, -(bb.top - bb.floor + 200), 0), rayParams)
 		return hit and hit.Position.Y or nil
 	end
+	-- hay techo encima de este jugador?
+	function ctx.covered(entry, height)
+		local origin = entry.root.Position + Vector3.new(0, 2.5, 0)
+		return workspace:Raycast(origin, Vector3.new(0, height or 300, 0), rayParams) ~= nil
+	end
 
 	function ctx.fx(kind, ...)
-		DisasterFX:FireAllClients(kind, ...)
+		DisasterFX:FireAllClients(kind, ctx.id, ...)
 	end
 
 	function ctx.tween(inst, seconds, goal)
 		TweenService:Create(inst, TweenInfo.new(seconds, Enum.EasingStyle.Linear), goal):Play()
 	end
 
-	-- Cambia la iluminacion y la restaura al parar
 	local savedLight = {}
 	function ctx.setLighting(props)
 		for prop, value in pairs(props) do
@@ -165,72 +219,81 @@ local function buildContext(current, duration, name)
 		end
 	end)
 
-	-- Piezas pequenas que pueden romperse/salir volando (se calcula una vez)
-	local fragileCache
-	function ctx.fragileParts()
-		if fragileCache then
-			return fragileCache
-		end
-		fragileCache = {}
-		for _, d in ipairs(current.Folder:GetDescendants()) do
-			if d:IsA("Part") and d.Anchored and d.CanCollide and not NOT_FRAGILE[d.Name] then
-				local s = d.Size
-				if s.X * s.Y * s.Z < 450 and math.max(s.X, s.Y, s.Z) < 30 and not inElevator(d, current.Folder) then
-					fragileCache[#fragileCache + 1] = d
-				end
-			end
-		end
-		return fragileCache
-	end
-
 	return ctx
 end
 
-function DisasterService.Stop()
-	local ctx = active
-	if not ctx then
+local function stopContext(ctx)
+	if ctx.stopped then
 		return
 	end
-	active = nil
 	ctx.stopped = true
-	for _, fn in ipairs(ctx.stopCallbacks) do
-		pcall(fn)
+	for i = #ctx.stopCallbacks, 1, -1 do
+		pcall(ctx.stopCallbacks[i])
 	end
 	ctx.folder:Destroy()
-	DisasterFX:FireAllClients("clear")
+	DisasterFX:FireAllClients("end", ctx.id)
+	for i, c in ipairs(active) do
+		if c == ctx then
+			table.remove(active, i)
+			break
+		end
+	end
 end
 
-function DisasterService.Start(current, duration, name)
-	DisasterService.Stop()
-	local def = current.Def
-	local options = def.Disasters or {}
-	if #options == 0 then
+function DisasterService.StopAll()
+	for i = #active, 1, -1 do
+		stopContext(active[i])
+	end
+	DisasterFX:FireAllClients("clear")
+end
+DisasterService.Stop = DisasterService.StopAll
+
+function DisasterService.Start(current, duration, name, opts)
+	opts = opts or {}
+	if not current or not current.Def then
 		return nil
 	end
-	name = name or options[math.random(#options)]
+	name = name or DisasterService.Pick(current)
+	if not name then
+		return nil
+	end
 	local module = Disasters:FindFirstChild(name)
 	if not module then
 		warn("DisasterService: no existe el desastre '" .. tostring(name) .. "'")
 		return nil
 	end
 	local disaster = require(module)
+	local delay = opts.delay or Config.DisasterDelay
+	local ctx = buildContext(current, duration + delay, name, opts)
+	active[#active + 1] = ctx
+	local info = ctx.info
 
-	local ctx = buildContext(current, duration, name)
-	active = ctx
-	ctx.fx("banner", disaster.Title, disaster.Description, Config.DisasterDelay)
+	local shown = opts.mystery and DisasterInfo.Mystery or info
+	DisasterFX:FireAllClients("banner", ctx.id, {
+		Title = shown.Title,
+		Desc = shown.Desc,
+		Icon = shown.Icon,
+		Color = shown.Color,
+	}, delay)
 
 	task.spawn(function()
-		task.wait(Config.DisasterDelay)
+		task.wait(delay)
 		if ctx.stopped then
 			return
 		end
+		ctx.startTime = workspace:GetServerTimeNow()
+		ctx.duration = math.max(1, ctx.endTime - ctx.startTime)
+		if opts.mystery then
+			DisasterFX:FireAllClients("banner", ctx.id, { Title = info.Title, Desc = info.Desc, Icon = info.Icon, Color = info.Color }, 0)
+		end
+		DisasterFX:FireAllClients("start", ctx.id, name)
 		local ok, err = pcall(disaster.Run, ctx)
 		if not ok then
 			warn("DisasterService: error en el desastre " .. name .. ": " .. tostring(err))
 		end
 	end)
 
-	return { Name = name, Title = disaster.Title, Description = disaster.Description }
+	return { Id = ctx.id, Name = name, Title = info.Title, Icon = info.Icon, Description = info.Desc, Color = info.Color }
 end
 
 return DisasterService
