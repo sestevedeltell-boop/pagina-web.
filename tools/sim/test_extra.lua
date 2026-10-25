@@ -140,6 +140,26 @@ test("partida", function()
 	local okD, amount = Rewards.ClaimDaily(p2)
 	check(okD and amount > 0, "no dio recompensa diaria")
 	check(not Rewards.ClaimDaily(p2), "dio la diaria dos veces")
+	-- comandos de administrador (en el simulador cuenta como Studio)
+	local Admin = require(TEST.server.AdminCommands)
+	local before = PlayerData.Get(p2).Coins
+	check(Admin.Handle(p2, "!monedas 100"), "no reconocio !monedas")
+	SimAdvance(0.2)
+	check(PlayerData.Get(p2).Coins == before + 100, "!monedas no dio monedas")
+	check(Admin.Handle(p2, "!mapa castil"), "no reconocio !mapa")
+	check(Admin.Handle(p2, "!desastre tornad"), "no reconocio !desastre")
+	local lastMap
+	remotes.RoundState.OnClientEvent:Connect(function(st) if st.Map then lastMap = st.Map end end)
+	check(Admin.Handle(p2, "!saltar"), "no reconocio !saltar")
+	-- puede que ya hubiera una votacion en marcha: el forzado vale para la siguiente ronda
+	local seen = {}
+	remotes.RoundState.OnClientEvent:Connect(function(st) if st.Map and seen[#seen] ~= st.Map then seen[#seen + 1] = st.Map end end)
+	for _ = 1, 400 do
+		SimAdvance(1)
+		if table.find(seen, "Castillo") then lastMap = "Castillo" break end
+	end
+	check(lastMap == "Castillo", "!mapa no forzo el mapa (" .. tostring(lastMap) .. ")")
+	check(not Admin.Handle(p2, "hola"), "trato un mensaje normal como comando")
 	RemovePlayer(p1)
 	RemovePlayer(p2)
 end)

@@ -27,6 +27,7 @@ local WALL = 0.6
 local SPEED = 16 -- studs por segundo
 
 local registry = {} -- [id] = { request, labels, cabin, state }
+Elevator._registry = registry -- para pruebas
 local nextId = 0
 
 local MenuEvent = Net.Event("ElevatorMenu")
@@ -211,9 +212,10 @@ function Elevator.build(b, cfg)
 			end
 			setDoors(true)
 			task.wait(4)
-		end
-		if st.alive then
-			setDoors(false)
+			-- sin mas peticiones: cerrar puertas. Si mientras se cerraban llega otra peticion, se sigue.
+			while st.alive and #st.queue == 0 and st.open do
+				setDoors(false)
+			end
 		end
 		st.busy = false
 	end
@@ -227,7 +229,8 @@ function Elevator.build(b, cfg)
 				return
 			end
 		end
-		if idx == st.floor and st.busy then
+		-- ya esta aqui con las puertas abiertas: nada que hacer
+		if idx == st.floor and st.busy and st.open then
 			return
 		end
 		st.queue[#st.queue + 1] = idx

@@ -33,6 +33,7 @@ if Lobby.ShouldBuild() then
 	end
 end
 require(S.Leaderboards).Init()
+require(S.AdminCommands).Init()
 
 if Config.RunDefaultLoop then
 	task.spawn(require(S.GameLoop).Run)

@@ -9,8 +9,47 @@ local UI, SoundFX
 local gui, toastList, feed, bigText
 local C = Color3.fromRGB
 
+-- "+5" flotando en el mundo donde se recogio la moneda
+local function worldPopup(amount, position)
+	local att = Instance.new("Attachment")
+	att.WorldPosition = position
+	att.Parent = workspace.Terrain
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.new(0, 120, 0, 40)
+	bb.AlwaysOnTop = true
+	bb.LightInfluence = 0
+	bb.Adornee = att
+	bb.Parent = att
+	local label = UI.Label(bb, {
+		Text = "+" .. amount,
+		Font = UI.Theme.Black,
+		TextSize = 30,
+		TextColor3 = amount >= 25 and C(255, 120, 220) or UI.Theme.Accent,
+		Size = UDim2.fromScale(1, 1),
+	})
+	UI.TextStroke(label, 2)
+	UI.Tween(bb, 1, { StudsOffset = Vector3.new(0, 5, 0) })
+	UI.Tween(label, 1, { TextTransparency = 1 })
+	task.delay(1.1, function()
+		att:Destroy()
+	end)
+end
+
+-- Fundido a blanco (al teletransportar)
+local fadeFrame
+function Popups.Fade()
+	if not fadeFrame then
+		return
+	end
+	fadeFrame.BackgroundTransparency = 0
+	UI.Tween(fadeFrame, 0.7, { BackgroundTransparency = 1 })
+end
+
 -- "+5 🪙" que sale cerca del contador de monedas y sube
-function Popups.Coin(amount, xp, text)
+function Popups.Coin(amount, xp, text, position)
+	if typeof(position) == "Vector3" and amount > 0 then
+		worldPopup(amount, position)
+	end
 	local T = UI.Theme
 	local label = UI.Label(gui, {
 		Text = (amount > 0 and ("+" .. amount .. " 🪙") or "") .. (xp and xp > 0 and ("  +" .. xp .. " XP") or ""),
@@ -125,10 +164,12 @@ function Popups.Init(modules)
 		Visible = false,
 	})
 	UI.TextStroke(bigText, 4)
+	local fadeGui = UI.Gui("FundidoGui", 20, true)
+	fadeFrame = UI.New("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, Active = false, Parent = fadeGui })
 
 	Net.Event("Popup").OnClientEvent:Connect(function(p)
 		if typeof(p) == "table" then
-			Popups.Coin(p.Coins or 0, p.XP, p.Text)
+			Popups.Coin(p.Coins or 0, p.XP, p.Text, p.Position)
 		end
 	end)
 	Net.Event("Toast").OnClientEvent:Connect(function(t)

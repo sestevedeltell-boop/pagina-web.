@@ -201,6 +201,10 @@ return {
 	BuildBudgetMs = 6, -- milisegundos por frame dedicados a construir el mapa
 	GraphBudgetMs = 4, -- milisegundos por frame para calcular apoyos tras construir
 
+	-- ===== Administracion =====
+	-- UserIds que pueden usar los comandos de prueba (!mapa, !desastre, !saltar...). En Studio y el dueno siempre pueden.
+	Admins = {},
+
 	-- ===== Datos =====
 	DataStoreName = "IslasDatos_v2",
 	LeaderboardStoreName = "IslasVictorias_v2",

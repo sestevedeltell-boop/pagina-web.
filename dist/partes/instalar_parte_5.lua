@@ -845,6 +845,8 @@ function Hud.Init(modules)
 	UI.Stroke(coinBox, T.Accent, 2, 0.3)
 	UI.Label(coinBox, { Text = "🪙", TextSize = 26, Size = UDim2.new(0, 40, 1, 0), Position = UDim2.new(0, 4, 0, 0) })
 	local coins = UI.Label(coinBox, { Text = "0", Font = T.Black, TextSize = 26, TextColor3 = T.Accent, Size = UDim2.new(1, -52, 1, 0), Position = UDim2.new(0, 44, 0, 0), TextXAlignment = Enum.TextXAlignment.Left })
+	local streak = UI.Label(coinBox, { Text = "", Font = T.Black, TextSize = 18, TextColor3 = C(255, 140, 60), Size = UDim2.new(0, 70, 1, 0), Position = UDim2.new(1, 6, 0, 0), TextXAlignment = Enum.TextXAlignment.Left })
+	UI.TextStroke(streak, 2)
 	local levelBox = UI.Panel(left, { Size = UDim2.new(1, 0, 0, 56), Position = UDim2.new(0, 0, 0, 50), BackgroundColor3 = T.Bg, BackgroundTransparency = 0.15 })
 	local levelBadge = UI.Panel(levelBox, { Size = UDim2.new(0, 44, 0, 44), Position = UDim2.new(0, 6, 0, 6), BackgroundColor3 = T.Info })
 	local levelText = UI.Label(levelBadge, { Text = "1", Font = T.Black, TextSize = 22, Size = UDim2.fromScale(1, 1) })
@@ -872,6 +874,11 @@ function Hud.Init(modules)
 		targetCoins = data.Coins or 0
 		if old and data.Coins > old.Coins then
 			UI.Pop(coinBox, 0.12)
+		end
+		local st = data.Stats and data.Stats.Streak or 0
+		streak.Text = st >= 2 and ("🔥x" .. st) or ""
+		if old and old.Stats and st > (old.Stats.Streak or 0) and st >= 2 then
+			UI.Pop(streak, 0.4)
 		end
 		levelText.Text = tostring(data.Level)
 		titleText.Text = data.Title or ""
@@ -920,7 +927,13 @@ function Hud.Init(modules)
 	end)
 
 	-- ===== Estado de ronda =====
+	local lastPhase = nil
 	local function refreshRound(st)
+		-- fundido al ir a la isla y al volver al lobby
+		if lastPhase and st.Phase ~= lastPhase and modules.Popups and (st.Phase == "Round" or (lastPhase == "Results" and st.Phase ~= "Results")) then
+			modules.Popups.Fade()
+		end
+		lastPhase = st.Phase
 		phase.Text = PHASE_TEXT[st.Phase] or st.Phase or ""
 		status.Text = st.Status or ""
 		for _, c in ipairs(chips:GetChildren()) do
@@ -1084,8 +1097,47 @@ local UI, SoundFX
 local gui, toastList, feed, bigText
 local C = Color3.fromRGB
 
+-- "+5" flotando en el mundo donde se recogio la moneda
+local function worldPopup(amount, position)
+	local att = Instance.new("Attachment")
+	att.WorldPosition = position
+	att.Parent = workspace.Terrain
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.new(0, 120, 0, 40)
+	bb.AlwaysOnTop = true
+	bb.LightInfluence = 0
+	bb.Adornee = att
+	bb.Parent = att
+	local label = UI.Label(bb, {
+		Text = "+" .. amount,
+		Font = UI.Theme.Black,
+		TextSize = 30,
+		TextColor3 = amount >= 25 and C(255, 120, 220) or UI.Theme.Accent,
+		Size = UDim2.fromScale(1, 1),
+	})
+	UI.TextStroke(label, 2)
+	UI.Tween(bb, 1, { StudsOffset = Vector3.new(0, 5, 0) })
+	UI.Tween(label, 1, { TextTransparency = 1 })
+	task.delay(1.1, function()
+		att:Destroy()
+	end)
+end
+
+-- Fundido a blanco (al teletransportar)
+local fadeFrame
+function Popups.Fade()
+	if not fadeFrame then
+		return
+	end
+	fadeFrame.BackgroundTransparency = 0
+	UI.Tween(fadeFrame, 0.7, { BackgroundTransparency = 1 })
+end
+
 -- "+5 🪙" que sale cerca del contador de monedas y sube
-function Popups.Coin(amount, xp, text)
+function Popups.Coin(amount, xp, text, position)
+	if typeof(position) == "Vector3" and amount > 0 then
+		worldPopup(amount, position)
+	end
 	local T = UI.Theme
 	local label = UI.Label(gui, {
 		Text = (amount > 0 and ("+" .. amount .. " 🪙") or "") .. (xp and xp > 0 and ("  +" .. xp .. " XP") or ""),
@@ -1200,10 +1252,12 @@ function Popups.Init(modules)
 		Visible = false,
 	})
 	UI.TextStroke(bigText, 4)
+	local fadeGui = UI.Gui("FundidoGui", 20, true)
+	fadeFrame = UI.New("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, Active = false, Parent = fadeGui })
 
 	Net.Event("Popup").OnClientEvent:Connect(function(p)
 		if typeof(p) == "table" then
-			Popups.Coin(p.Coins or 0, p.XP, p.Text)
+			Popups.Coin(p.Coins or 0, p.XP, p.Text, p.Position)
 		end
 	end)
 	Net.Event("Toast").OnClientEvent:Connect(function(t)

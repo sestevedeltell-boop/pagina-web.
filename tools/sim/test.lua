@@ -116,6 +116,11 @@ test("mapas", function()
 					prompts[#prompts].Triggered:Fire(player)
 					SimAdvance(40)
 					local up = floorPart.Position.Y - base
+					if up <= 5 then
+						local objs = {}
+						for _, pp in ipairs(prompts) do objs[#objs + 1] = pp.ObjectText end
+						print("  depuracion: prompts=" .. table.concat(objs, ",") .. " base=" .. base .. " ahora=" .. floorPart.Position.Y .. " cabina=" .. d:GetFullName())
+					end
 					check(up > 5, name .. ": " .. prefix .. " no sube")
 					prompts[1].Triggered:Fire(player)
 					SimAdvance(40)

@@ -201,6 +201,10 @@ return {
 	BuildBudgetMs = 6, -- milisegundos por frame dedicados a construir el mapa
 	GraphBudgetMs = 4, -- milisegundos por frame para calcular apoyos tras construir
 
+	-- ===== Administracion =====
+	-- UserIds que pueden usar los comandos de prueba (!mapa, !desastre, !saltar...). En Studio y el dueno siempre pueden.
+	Admins = {},
+
 	-- ===== Datos =====
 	DataStoreName = "IslasDatos_v2",
 	LeaderboardStoreName = "IslasVictorias_v2",
@@ -2515,6 +2519,7 @@ local WALL = 0.6
 local SPEED = 16 -- studs por segundo
 
 local registry = {} -- [id] = { request, labels, cabin, state }
+Elevator._registry = registry -- para pruebas
 local nextId = 0
 
 local MenuEvent = Net.Event("ElevatorMenu")
@@ -2699,9 +2704,10 @@ function Elevator.build(b, cfg)
 			end
 			setDoors(true)
 			task.wait(4)
-		end
-		if st.alive then
-			setDoors(false)
+			-- sin mas peticiones: cerrar puertas. Si mientras se cerraban llega otra peticion, se sigue.
+			while st.alive and #st.queue == 0 and st.open do
+				setDoors(false)
+			end
 		end
 		st.busy = false
 	end
@@ -2715,7 +2721,8 @@ function Elevator.build(b, cfg)
 				return
 			end
 		end
-		if idx == st.floor and st.busy then
+		-- ya esta aqui con las puertas abiertas: nada que hacer
+		if idx == st.floor and st.busy and st.open then
 			return
 		end
 		st.queue[#st.queue + 1] = idx
@@ -3196,6 +3203,165 @@ function Builder:Pine(x, z, y, scale)
 end
 
 return Util
+]])
+
+add("ServerScriptService", { "IslasServer" }, "AdminCommands", "ModuleScript", [[
+-- AdminCommands: comandos de chat para probar el juego (solo en Studio, para el dueno del juego
+-- o para los UserId de Config.Admins si existe).
+--   !mapa castillo     la proxima ronda sera en ese mapa (sin votacion); vale el nombre en espanol o el interno
+--   !desastre tornado  el proximo desastre sera ese
+--   !saltar            salta el descanso o termina la ronda actual
+--   !monedas 1000      te da monedas
+--   !nivel 500         te da XP
+--   !lista             muestra mapas y desastres disponibles
+--   !stats             estado de la destruccion
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("IslasShared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local S = script.Parent
+local PlayerData = require(S.PlayerData)
+local MapService = require(S.MapService)
+local DisasterService = require(S.DisasterService)
+local Destruction = require(S.Destruction)
+local GameLoop = require(S.GameLoop)
+
+local Toast = Net.Event("Toast")
+
+local AdminCommands = {}
+
+local function isAdmin(player)
+	if RunService:IsStudio() or player.UserId == game.CreatorId then
+		return true
+	end
+	for _, id in ipairs(Config.Admins or {}) do
+		if id == player.UserId then
+			return true
+		end
+	end
+	return false
+end
+
+local function reply(player, text)
+	Toast:FireClient(player, { Title = "Admin", Text = text })
+end
+
+-- Busca por nombre interno (City) o por titulo en espanol (Ciudad), completo o en parte
+local function findName(list, query, titleOf)
+	query = string.lower(query or "")
+	if query == "" then
+		return nil
+	end
+	local function keys(n)
+		local k = { string.lower(n) }
+		if titleOf then
+			local ok, t = pcall(titleOf, n)
+			if ok and t then
+				k[2] = string.lower(t)
+			end
+		end
+		return k
+	end
+	for _, n in ipairs(list) do
+		for _, k in ipairs(keys(n)) do
+			if k == query then
+				return n
+			end
+		end
+	end
+	for _, n in ipairs(list) do
+		for _, k in ipairs(keys(n)) do
+			if string.find(k, query, 1, true) then
+				return n
+			end
+		end
+	end
+	return nil
+end
+
+local commands = {}
+
+commands.mapa = function(player, arg)
+	local name = findName(MapService.GetMapNames(), arg, function(n)
+		return MapService.GetInfo(n).Title
+	end)
+	if not name then
+		return reply(player, "No existe ese mapa. Usa !lista")
+	end
+	GameLoop.ForceMap(name)
+	reply(player, "Proxima ronda: " .. name)
+end
+
+commands.desastre = function(player, arg)
+	local name = findName(DisasterService.GetNames(), arg, DisasterService.TitleOf)
+	if not name then
+		return reply(player, "No existe ese desastre. Usa !lista")
+	end
+	GameLoop.ForceDisaster(name)
+	reply(player, "Proximo desastre: " .. name)
+end
+
+commands.saltar = function(player)
+	GameLoop.Skip()
+	reply(player, "Saltando fase...")
+end
+
+commands.monedas = function(player, arg)
+	local n = tonumber(arg) or 1000
+	PlayerData.AddCoins(player, n)
+	reply(player, "+" .. n .. " monedas")
+end
+
+commands.nivel = function(player, arg)
+	local n = tonumber(arg) or 500
+	PlayerData.AddXP(player, n)
+	reply(player, "+" .. n .. " XP")
+end
+
+commands.lista = function(player)
+	reply(player, "Mapas: " .. table.concat(MapService.GetMapNames(), ", "))
+	reply(player, "Desastres: " .. table.concat(DisasterService.GetNames(), ", "))
+end
+
+commands.stats = function(player)
+	local st = Destruction.Stats()
+	reply(player, string.format("Piezas %d · rotas %d · derrumbadas %d · fisicas %d · escombros %d",
+		st.parts or 0, st.broken or 0, st.collapsed or 0, st.physics or 0, st.rubble or 0))
+end
+
+function AdminCommands.Handle(player, message)
+	if typeof(message) ~= "string" or message:sub(1, 1) ~= "!" or not isAdmin(player) then
+		return false
+	end
+	local cmd, arg = message:match("^!(%S+)%s*(.*)$")
+	local fn = cmd and commands[string.lower(cmd)]
+	if fn then
+		local ok, err = pcall(fn, player, arg)
+		if not ok then
+			reply(player, "Error: " .. tostring(err))
+		end
+		return true
+	end
+	return false
+end
+
+function AdminCommands.Init()
+	local function onPlayer(player)
+		player.Chatted:Connect(function(message)
+			AdminCommands.Handle(player, message)
+		end)
+	end
+	for _, p in ipairs(Players:GetPlayers()) do
+		onPlayer(p)
+	end
+	Players.PlayerAdded:Connect(onPlayer)
+end
+
+return AdminCommands
 ]])
 
 add("ServerScriptService", { "IslasServer" }, "CoinDrops", "ModuleScript", [[
@@ -5221,6 +5387,18 @@ GameLoop.State = state
 
 local participants = {} -- [player] = { alive = bool, conn }
 
+-- Para pruebas (comandos de administrador)
+local forced = { map = nil, disaster = nil, skip = false }
+function GameLoop.ForceMap(name)
+	forced.map = name
+end
+function GameLoop.ForceDisaster(name)
+	forced.disaster = name
+end
+function GameLoop.Skip()
+	forced.skip = true
+end
+
 local function now()
 	return workspace:GetServerTimeNow()
 end
@@ -5241,7 +5419,8 @@ end
 -- espera actualizando el temporizador del lobby
 local function countdown(seconds, status)
 	local endAt = now() + seconds
-	while now() < endAt do
+	forced.skip = false
+	while now() < endAt and not forced.skip do
 		Lobby.SetStatus(status, Format.Time(endAt - now()))
 		task.wait(math.min(1, math.max(0.05, endAt - now())))
 	end
@@ -5428,7 +5607,8 @@ local function playRound(winner)
 	local disasters = {}
 	if Config.EnableDisasters then
 		local mystery = math.random() < Config.MysteryChance
-		local first = DisasterService.Start(current, Config.RoundTime, nil, { intensity = intensity, mystery = mystery })
+		local first = DisasterService.Start(current, Config.RoundTime, forced.disaster, { intensity = intensity, mystery = mystery })
+		forced.disaster = nil
 		if first then
 			disasters[#disasters + 1] = first
 			state.Disasters[#state.Disasters + 1] = mystery and { Title = "???", Icon = "❓" } or { Title = first.Title, Icon = first.Icon }
@@ -5450,7 +5630,8 @@ local function playRound(winner)
 	local endT = startT + total
 	local secondTried = false
 	local nextTick = startT + Config.DisasterDelay + Config.AliveTickInterval
-	while now() < endT do
+	forced.skip = false
+	while now() < endT and not forced.skip do
 		task.wait(0.5)
 		-- revisar vivos (por si alguien salio del mapa o del juego)
 		for player, p in pairs(participants) do
@@ -5463,7 +5644,7 @@ local function playRound(winner)
 				local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 				if not hum or hum.Health <= 0 then
 					onDeath(player)
-				elseif not MapService.IsOnMap(player) then
+				elseif now() > startT + 6 and not MapService.IsOnMap(player) then
 					-- fuera del mapa (por ejemplo, cayo al vacio y reaparecio en el lobby)
 					p.alive = false
 					refreshAlive()
@@ -5587,7 +5768,12 @@ function GameLoop.Run()
 		countdown(Config.IntermissionTime, "Siguiente ronda en")
 
 		setPhase("Vote", Config.VoteTime, "¡Vota el siguiente mapa!")
-		local winner = VoteService.Run(VoteService.PickOptions(Config.OptionsPerVote), Config.VoteTime)
+		local winner
+		if forced.map then
+			winner, forced.map = forced.map, nil
+		else
+			winner = VoteService.Run(VoteService.PickOptions(Config.OptionsPerVote), Config.VoteTime)
+		end
 
 		local ok, err = pcall(playRound, winner)
 		if not ok then
@@ -6605,6 +6791,7 @@ if Lobby.ShouldBuild() then
 	end
 end
 require(S.Leaderboards).Init()
+require(S.AdminCommands).Init()
 
 if Config.RunDefaultLoop then
 	task.spawn(require(S.GameLoop).Run)
@@ -9044,6 +9231,8 @@ function Hud.Init(modules)
 	UI.Stroke(coinBox, T.Accent, 2, 0.3)
 	UI.Label(coinBox, { Text = "🪙", TextSize = 26, Size = UDim2.new(0, 40, 1, 0), Position = UDim2.new(0, 4, 0, 0) })
 	local coins = UI.Label(coinBox, { Text = "0", Font = T.Black, TextSize = 26, TextColor3 = T.Accent, Size = UDim2.new(1, -52, 1, 0), Position = UDim2.new(0, 44, 0, 0), TextXAlignment = Enum.TextXAlignment.Left })
+	local streak = UI.Label(coinBox, { Text = "", Font = T.Black, TextSize = 18, TextColor3 = C(255, 140, 60), Size = UDim2.new(0, 70, 1, 0), Position = UDim2.new(1, 6, 0, 0), TextXAlignment = Enum.TextXAlignment.Left })
+	UI.TextStroke(streak, 2)
 	local levelBox = UI.Panel(left, { Size = UDim2.new(1, 0, 0, 56), Position = UDim2.new(0, 0, 0, 50), BackgroundColor3 = T.Bg, BackgroundTransparency = 0.15 })
 	local levelBadge = UI.Panel(levelBox, { Size = UDim2.new(0, 44, 0, 44), Position = UDim2.new(0, 6, 0, 6), BackgroundColor3 = T.Info })
 	local levelText = UI.Label(levelBadge, { Text = "1", Font = T.Black, TextSize = 22, Size = UDim2.fromScale(1, 1) })
@@ -9071,6 +9260,11 @@ function Hud.Init(modules)
 		targetCoins = data.Coins or 0
 		if old and data.Coins > old.Coins then
 			UI.Pop(coinBox, 0.12)
+		end
+		local st = data.Stats and data.Stats.Streak or 0
+		streak.Text = st >= 2 and ("🔥x" .. st) or ""
+		if old and old.Stats and st > (old.Stats.Streak or 0) and st >= 2 then
+			UI.Pop(streak, 0.4)
 		end
 		levelText.Text = tostring(data.Level)
 		titleText.Text = data.Title or ""
@@ -9119,7 +9313,13 @@ function Hud.Init(modules)
 	end)
 
 	-- ===== Estado de ronda =====
+	local lastPhase = nil
 	local function refreshRound(st)
+		-- fundido al ir a la isla y al volver al lobby
+		if lastPhase and st.Phase ~= lastPhase and modules.Popups and (st.Phase == "Round" or (lastPhase == "Results" and st.Phase ~= "Results")) then
+			modules.Popups.Fade()
+		end
+		lastPhase = st.Phase
 		phase.Text = PHASE_TEXT[st.Phase] or st.Phase or ""
 		status.Text = st.Status or ""
 		for _, c in ipairs(chips:GetChildren()) do
@@ -9283,8 +9483,47 @@ local UI, SoundFX
 local gui, toastList, feed, bigText
 local C = Color3.fromRGB
 
+-- "+5" flotando en el mundo donde se recogio la moneda
+local function worldPopup(amount, position)
+	local att = Instance.new("Attachment")
+	att.WorldPosition = position
+	att.Parent = workspace.Terrain
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.new(0, 120, 0, 40)
+	bb.AlwaysOnTop = true
+	bb.LightInfluence = 0
+	bb.Adornee = att
+	bb.Parent = att
+	local label = UI.Label(bb, {
+		Text = "+" .. amount,
+		Font = UI.Theme.Black,
+		TextSize = 30,
+		TextColor3 = amount >= 25 and C(255, 120, 220) or UI.Theme.Accent,
+		Size = UDim2.fromScale(1, 1),
+	})
+	UI.TextStroke(label, 2)
+	UI.Tween(bb, 1, { StudsOffset = Vector3.new(0, 5, 0) })
+	UI.Tween(label, 1, { TextTransparency = 1 })
+	task.delay(1.1, function()
+		att:Destroy()
+	end)
+end
+
+-- Fundido a blanco (al teletransportar)
+local fadeFrame
+function Popups.Fade()
+	if not fadeFrame then
+		return
+	end
+	fadeFrame.BackgroundTransparency = 0
+	UI.Tween(fadeFrame, 0.7, { BackgroundTransparency = 1 })
+end
+
 -- "+5 🪙" que sale cerca del contador de monedas y sube
-function Popups.Coin(amount, xp, text)
+function Popups.Coin(amount, xp, text, position)
+	if typeof(position) == "Vector3" and amount > 0 then
+		worldPopup(amount, position)
+	end
 	local T = UI.Theme
 	local label = UI.Label(gui, {
 		Text = (amount > 0 and ("+" .. amount .. " 🪙") or "") .. (xp and xp > 0 and ("  +" .. xp .. " XP") or ""),
@@ -9399,10 +9638,12 @@ function Popups.Init(modules)
 		Visible = false,
 	})
 	UI.TextStroke(bigText, 4)
+	local fadeGui = UI.Gui("FundidoGui", 20, true)
+	fadeFrame = UI.New("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, Active = false, Parent = fadeGui })
 
 	Net.Event("Popup").OnClientEvent:Connect(function(p)
 		if typeof(p) == "table" then
-			Popups.Coin(p.Coins or 0, p.XP, p.Text)
+			Popups.Coin(p.Coins or 0, p.XP, p.Text, p.Position)
 		end
 	end)
 	Net.Event("Toast").OnClientEvent:Connect(function(t)
@@ -10469,4 +10710,4 @@ end
 return VoteUI
 ]])
 
-print("Islas de Desastres instalado: 76 scripts. Dale a Play para probar.")
+print("Islas de Desastres instalado: 77 scripts. Dale a Play para probar.")

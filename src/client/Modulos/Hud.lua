@@ -59,6 +59,8 @@ function Hud.Init(modules)
 	UI.Stroke(coinBox, T.Accent, 2, 0.3)
 	UI.Label(coinBox, { Text = "🪙", TextSize = 26, Size = UDim2.new(0, 40, 1, 0), Position = UDim2.new(0, 4, 0, 0) })
 	local coins = UI.Label(coinBox, { Text = "0", Font = T.Black, TextSize = 26, TextColor3 = T.Accent, Size = UDim2.new(1, -52, 1, 0), Position = UDim2.new(0, 44, 0, 0), TextXAlignment = Enum.TextXAlignment.Left })
+	local streak = UI.Label(coinBox, { Text = "", Font = T.Black, TextSize = 18, TextColor3 = C(255, 140, 60), Size = UDim2.new(0, 70, 1, 0), Position = UDim2.new(1, 6, 0, 0), TextXAlignment = Enum.TextXAlignment.Left })
+	UI.TextStroke(streak, 2)
 	local levelBox = UI.Panel(left, { Size = UDim2.new(1, 0, 0, 56), Position = UDim2.new(0, 0, 0, 50), BackgroundColor3 = T.Bg, BackgroundTransparency = 0.15 })
 	local levelBadge = UI.Panel(levelBox, { Size = UDim2.new(0, 44, 0, 44), Position = UDim2.new(0, 6, 0, 6), BackgroundColor3 = T.Info })
 	local levelText = UI.Label(levelBadge, { Text = "1", Font = T.Black, TextSize = 22, Size = UDim2.fromScale(1, 1) })
@@ -86,6 +88,11 @@ function Hud.Init(modules)
 		targetCoins = data.Coins or 0
 		if old and data.Coins > old.Coins then
 			UI.Pop(coinBox, 0.12)
+		end
+		local st = data.Stats and data.Stats.Streak or 0
+		streak.Text = st >= 2 and ("🔥x" .. st) or ""
+		if old and old.Stats and st > (old.Stats.Streak or 0) and st >= 2 then
+			UI.Pop(streak, 0.4)
 		end
 		levelText.Text = tostring(data.Level)
 		titleText.Text = data.Title or ""
@@ -134,7 +141,13 @@ function Hud.Init(modules)
 	end)
 
 	-- ===== Estado de ronda =====
+	local lastPhase = nil
 	local function refreshRound(st)
+		-- fundido al ir a la isla y al volver al lobby
+		if lastPhase and st.Phase ~= lastPhase and modules.Popups and (st.Phase == "Round" or (lastPhase == "Results" and st.Phase ~= "Results")) then
+			modules.Popups.Fade()
+		end
+		lastPhase = st.Phase
 		phase.Text = PHASE_TEXT[st.Phase] or st.Phase or ""
 		status.Text = st.Status or ""
 		for _, c in ipairs(chips:GetChildren()) do

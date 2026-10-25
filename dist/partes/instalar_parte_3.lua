@@ -1859,6 +1859,18 @@ GameLoop.State = state
 
 local participants = {} -- [player] = { alive = bool, conn }
 
+-- Para pruebas (comandos de administrador)
+local forced = { map = nil, disaster = nil, skip = false }
+function GameLoop.ForceMap(name)
+	forced.map = name
+end
+function GameLoop.ForceDisaster(name)
+	forced.disaster = name
+end
+function GameLoop.Skip()
+	forced.skip = true
+end
+
 local function now()
 	return workspace:GetServerTimeNow()
 end
@@ -1879,7 +1891,8 @@ end
 -- espera actualizando el temporizador del lobby
 local function countdown(seconds, status)
 	local endAt = now() + seconds
-	while now() < endAt do
+	forced.skip = false
+	while now() < endAt and not forced.skip do
 		Lobby.SetStatus(status, Format.Time(endAt - now()))
 		task.wait(math.min(1, math.max(0.05, endAt - now())))
 	end
@@ -2066,7 +2079,8 @@ local function playRound(winner)
 	local disasters = {}
 	if Config.EnableDisasters then
 		local mystery = math.random() < Config.MysteryChance
-		local first = DisasterService.Start(current, Config.RoundTime, nil, { intensity = intensity, mystery = mystery })
+		local first = DisasterService.Start(current, Config.RoundTime, forced.disaster, { intensity = intensity, mystery = mystery })
+		forced.disaster = nil
 		if first then
 			disasters[#disasters + 1] = first
 			state.Disasters[#state.Disasters + 1] = mystery and { Title = "???", Icon = "❓" } or { Title = first.Title, Icon = first.Icon }
@@ -2088,7 +2102,8 @@ local function playRound(winner)
 	local endT = startT + total
 	local secondTried = false
 	local nextTick = startT + Config.DisasterDelay + Config.AliveTickInterval
-	while now() < endT do
+	forced.skip = false
+	while now() < endT and not forced.skip do
 		task.wait(0.5)
 		-- revisar vivos (por si alguien salio del mapa o del juego)
 		for player, p in pairs(participants) do
@@ -2101,7 +2116,7 @@ local function playRound(winner)
 				local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 				if not hum or hum.Health <= 0 then
 					onDeath(player)
-				elseif not MapService.IsOnMap(player) then
+				elseif now() > startT + 6 and not MapService.IsOnMap(player) then
 					-- fuera del mapa (por ejemplo, cayo al vacio y reaparecio en el lobby)
 					p.alive = false
 					refreshAlive()
@@ -2225,7 +2240,12 @@ function GameLoop.Run()
 		countdown(Config.IntermissionTime, "Siguiente ronda en")
 
 		setPhase("Vote", Config.VoteTime, "¡Vota el siguiente mapa!")
-		local winner = VoteService.Run(VoteService.PickOptions(Config.OptionsPerVote), Config.VoteTime)
+		local winner
+		if forced.map then
+			winner, forced.map = forced.map, nil
+		else
+			winner = VoteService.Run(VoteService.PickOptions(Config.OptionsPerVote), Config.VoteTime)
+		end
 
 		local ok, err = pcall(playRound, winner)
 		if not ok then
