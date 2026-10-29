@@ -11,7 +11,7 @@ local AmusementPark = {
 	Description = "Noria y tiovivo girando, torre de caida con ascensor, montana rusa y casa del terror.",
 	Lighting = { ClockTime = 18.2, Brightness = 1.8 },
 	Bounds = { x1 = -160, x2 = 160, z1 = -160, z2 = 170, top = 120, floor = 0 },
-	Disasters = { "Earthquake", "Fire", "Meteors", "Tornado", "Lightning", "UFO", "BlackHole", "AcidRain", "Virus", "Tsunami", "Volcano" },
+	Disasters = { "Earthquake", "Fire", "Meteors", "Tornado", "Lightning", "UFO", "BlackHole", "AcidRain", "Virus", "Tsunami", "Volcano", "Hail" },
 }
 
 local BRIGHT = { C(255, 80, 80), C(255, 200, 60), C(80, 200, 255), C(120, 255, 120), C(220, 110, 255), C(255, 140, 60) }

@@ -11,7 +11,7 @@ local Castle = {
 	Description = "Murallas, torres, foso con puente levadizo, mercado y torre del homenaje con montacargas.",
 	Lighting = { ClockTime = 16.5, Brightness = 1.8 },
 	Bounds = { x1 = -110, x2 = 110, z1 = -110, z2 = 130, top = 110, floor = 0 },
-	Disasters = { "Earthquake", "Fire", "Meteors", "Lightning", "Tornado", "Volcano", "Flood", "Virus", "Blizzard", "UFO" },
+	Disasters = { "Earthquake", "Fire", "Meteors", "Lightning", "Tornado", "Volcano", "Flood", "Virus", "Blizzard", "UFO", "Hail", "Avalanche" },
 	DisasterConfig = { Flood = { maxHeight = 20 } },
 }
 

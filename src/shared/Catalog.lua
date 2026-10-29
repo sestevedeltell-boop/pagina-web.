@@ -14,7 +14,7 @@ Catalog.Items = {
 	{ Id = "GloboVerde", Kind = "Gear", Name = "Globo verde", Price = 250, Icon = "🎈", Color = C(90, 220, 90),
 		Desc = "Mientras lo llevas caes despacio y saltas mas alto. El clasico." },
 	{ Id = "Paraguas", Kind = "Gear", Name = "Paraguas", Price = 300, Icon = "☂️", Color = C(120, 160, 255),
-		Desc = "Te protege de la lluvia acida, la ventisca y la tormenta de arena." },
+		Desc = "Te protege de la lluvia acida, el granizo, la ventisca y la tormenta de arena." },
 	{ Id = "BobinaVelocidad", Kind = "Gear", Name = "Bobina de velocidad", Price = 400, Icon = "⚡", Color = C(80, 200, 255),
 		Desc = "Corres un 60% mas rapido mientras la llevas." },
 	{ Id = "BobinaGravedad", Kind = "Gear", Name = "Bobina de gravedad", Price = 450, Icon = "🌀", Color = C(190, 120, 255),

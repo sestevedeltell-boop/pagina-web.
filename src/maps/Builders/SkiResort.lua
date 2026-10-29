@@ -11,7 +11,7 @@ local SkiResort = {
 	Description = "Montana nevada con refugio, cabanas y una torre-ascensor que sube hasta la cima.",
 	Lighting = { ClockTime = 11, Brightness = 2.4, OutdoorAmbient = C(170, 180, 200) },
 	Bounds = { x1 = -150, x2 = 150, z1 = -150, z2 = 150, top = 120, floor = 0 },
-	Disasters = { "Blizzard", "Earthquake", "Lightning", "Meteors", "Tornado", "Fire", "Volcano", "UFO", "AcidRain", "Virus" },
+	Disasters = { "Blizzard", "Earthquake", "Lightning", "Meteors", "Tornado", "Fire", "Volcano", "UFO", "AcidRain", "Virus", "Avalanche", "Hail" },
 }
 
 local SNOW = C(245, 248, 255)

@@ -10,7 +10,7 @@ local City = {
 	Description = "Calles con casas, tiendas, gasolinera, parque y una torre de apartamentos con ascensor.",
 	Lighting = { ClockTime = 13, Brightness = 2 },
 	Bounds = { x1 = -170, x2 = 170, z1 = -170, z2 = 170, top = 110, floor = 0 },
-	Disasters = { "Earthquake", "Fire", "Tornado", "Meteors", "Flood", "AcidRain", "Lightning", "Tsunami", "Virus", "UFO", "Volcano", "BlackHole" },
+	Disasters = { "Earthquake", "Fire", "Tornado", "Meteors", "Flood", "AcidRain", "Lightning", "Tsunami", "Virus", "UFO", "Volcano", "BlackHole", "Hail" },
 	DisasterConfig = { Flood = { maxHeight = 26 }, Tsunami = { height = 30 } },
 }
 

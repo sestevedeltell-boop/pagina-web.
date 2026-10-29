@@ -12,7 +12,7 @@ local CruiseShip = {
 	Description = "Un crucero gigante en alta mar: 4 cubiertas, ascensores, piscina y botes salvavidas.",
 	Lighting = { ClockTime = 17, Brightness = 2, FogEnd = 3000 },
 	Bounds = { x1 = -120, x2 = 140, z1 = -40, z2 = 40, top = 90, floor = 0 },
-	Disasters = { "Tsunami", "Flood", "Lightning", "Tornado", "Meteors", "Fire", "Virus", "UFO", "BlackHole", "AcidRain" },
+	Disasters = { "Tsunami", "Flood", "Lightning", "Tornado", "Meteors", "Fire", "Virus", "UFO", "BlackHole", "AcidRain", "Hail" },
 	DisasterConfig = { Flood = { maxHeight = 40 }, Tsunami = { height = 30, maxHeight = 14 } },
 }
 

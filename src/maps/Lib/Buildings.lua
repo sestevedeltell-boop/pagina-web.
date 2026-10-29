@@ -138,6 +138,30 @@ function Buildings.Tower(b, cx, cz, w, d, floors, opts)
 	return levels, g
 end
 
+-- Torre exenta con ascensor y balcones en cada parada (silo, mina, torre de observacion...).
+-- Mira hacia +Z. floors = alturas de las paradas. opts: name, labels, color, material, balconyColor
+function Buildings.LiftTower(b, x, z, floors, opts)
+	opts = opts or {}
+	local g = b:Group(opts.name or "TorreAscensor")
+	Elevator.build(g, {
+		name = (opts.name or "Torre") .. "Ascensor",
+		x = x,
+		z = z,
+		floors = floors,
+		labels = opts.labels,
+		wallColor = opts.color or C(200, 200, 205),
+		wallMaterial = opts.material or M.Concrete,
+	})
+	for i = 2, #floors do
+		local y = floors[i]
+		g:Slab("Balcon", x - 10, x + 10, z + 6.1, z + 15, y, 1.2, opts.balconyColor or Colors.DarkMetal, M.DiamondPlate)
+		g:Wall("Barandilla", "x", z + 15, x - 10, x + 10, y, y + 3.5, 0.3, Colors.Glass, M.Glass, {})
+		g:Wall("Barandilla", "z", x - 10, z + 6.1, z + 15, y, y + 3.5, 0.3, Colors.Glass, M.Glass, {})
+		g:Wall("Barandilla", "z", x + 10, z + 6.1, z + 15, y, y + 3.5, 0.3, Colors.Glass, M.Glass, {})
+	end
+	return g
+end
+
 function Buildings.Palm(b, x, z, y, scale)
 	scale = scale or 1
 	local h = 14 * scale

@@ -72,6 +72,8 @@ DF:FireClient(LOCAL_PLAYER, "path", id, "UFO", { points = pts, speed = 14, t0 = 
 DF:FireClient(LOCAL_PLAYER, "beam", id, 1, 3)
 DF:FireClient(LOCAL_PLAYER, "wave", id, { start = Vector3.new(-100, 0, 0), dir = Vector3.new(1, 0, 0), speed = 30, t0 = VCLOCK + 1, width = 200, height = 30, thick = 30, duration = 8 })
 DF:FireClient(LOCAL_PLAYER, "infected", id, LOCAL_PLAYER.UserId, true)
+DF:FireClient(LOCAL_PLAYER, "weather", id, "hail")
+DF:FireClient(LOCAL_PLAYER, "roller", id, { start = Vector3.new(-100, 10, 0), dir = Vector3.new(1, 0, 0), speed = 30, t0 = VCLOCK + 1, radius = 10, duration = 6 })
 ev("Shatter"):FireClient(LOCAL_PLAYER, {
 	{ p = Vector3.new(0, 5, 0), s = Vector3.new(12, 6, 1), c = C(200, 200, 200), m = "Concrete" },
 	{ p = Vector3.new(3, 5, 0), s = Vector3.new(4, 4, 0.5), c = C(170, 215, 235), m = "Glass" },

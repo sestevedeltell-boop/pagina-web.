@@ -146,6 +146,7 @@ local WEATHER = {
 	acid = { color = C(140, 255, 90), rate = 400, speed = 80, size = 0.25, length = 3, transparency = 0.3 },
 	snow = { color = C(255, 255, 255), rate = 300, speed = 12, size = 0.5, length = 0.5, transparency = 0.1, spread = 30 },
 	sand = { color = C(220, 180, 110), rate = 500, speed = 40, size = 0.6, length = 1, transparency = 0.35, sideways = true },
+	hail = { color = C(220, 240, 255), rate = 250, speed = 110, size = 0.5, length = 1, transparency = 0.1 },
 }
 
 local function weather(id, kind)
@@ -544,6 +545,35 @@ handlers.wave = function(id, data)
 		local d = (camPos() - center).Magnitude
 		if d < 150 then
 			shake(0.7 * (1 - d / 150), 0.3)
+		end
+		return true
+	end)
+end
+
+-- bola de nieve de la avalancha: misma trayectoria que en el servidor, rodando
+handlers.roller = function(id, data)
+	local d = data.radius * 2
+	local ball = track(id, part({
+		Name = "BolaNieve",
+		Shape = Enum.PartType.Ball,
+		Size = V(d, d, d),
+		Color = C(245, 250, 255),
+		Material = Enum.Material.Snow,
+		CFrame = CFrame.new(data.start),
+	}))
+	local axis = V(data.dir.Z, 0, -data.dir.X)
+	onUpdate(id, function(t)
+		local k = t - data.t0
+		if k > data.duration + 1 then
+			ball:Destroy()
+			return false
+		end
+		local pos = data.start + data.dir * data.speed * math.max(0, k)
+		local spin = data.speed * math.max(0, k) / data.radius
+		ball.CFrame = CFrame.new(pos) * CFrame.fromAxisAngle(axis, -spin)
+		local dist = (camPos() - pos).Magnitude
+		if dist < 120 and k >= 0 then
+			shake(0.8 * (1 - dist / 120), 0.3)
 		end
 		return true
 	end)

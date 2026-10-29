@@ -38,7 +38,7 @@ local savedGravity = nil
 local lobbySpawns = nil
 
 local LIGHT_PROPS = { "ClockTime", "Brightness", "Ambient", "OutdoorAmbient", "FogColor", "FogStart", "FogEnd" }
-local ALL_DISASTERS = { "Earthquake", "Fire", "Meteors", "Flood", "Lightning", "Tornado", "AcidRain", "Tsunami", "Volcano", "BlackHole", "UFO", "Virus" }
+local ALL_DISASTERS = { "Earthquake", "Fire", "Meteors", "Flood", "Lightning", "Tornado", "AcidRain", "Tsunami", "Volcano", "BlackHole", "UFO", "Virus", "Hail", "Avalanche" }
 
 -- Carpetas de ServerStorage con mapas propios (Model o Folder). Ver Config.CustomMapFolders.
 local function customFolders()

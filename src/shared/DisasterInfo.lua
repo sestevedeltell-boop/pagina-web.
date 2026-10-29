@@ -35,6 +35,10 @@ return {
 		Desc = "Absorbe todo lo que esta cerca, edificios incluidos. Corre en direccion contraria." },
 	UFO = { Title = "Invasion alienigena", Icon = "🛸", Color = C(120, 255, 200),
 		Desc = "Ovnis con rayos abductores y laseres. No te quedes bajo su luz." },
+	Hail = { Title = "Granizo", Icon = "🧊", Color = C(190, 225, 255),
+		Desc = "Caen piedras de hielo que rompen cristales y tejados. Ponte a cubierto o usa el paraguas." },
+	Avalanche = { Title = "Avalancha", Icon = "🏔️", Color = C(235, 245, 255),
+		Desc = "Bolas de nieve gigantes ruedan por el mapa y lo aplastan todo. Esquivalas o sube alto." },
 	Mystery = { Title = "???", Icon = "❓", Color = C(200, 200, 200),
 		Desc = "Desastre sorpresa: nadie sabe lo que viene." },
 }

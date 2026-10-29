@@ -11,7 +11,7 @@ local Airport = {
 	Description = "Terminal de 3 plantas con ascensores, torre de control, aviones, hangar y pista.",
 	Lighting = { ClockTime = 15, Brightness = 2 },
 	Bounds = { x1 = -200, x2 = 200, z1 = -170, z2 = 100, top = 130, floor = 0 },
-	Disasters = { "Earthquake", "Fire", "Meteors", "Flood", "Lightning", "Tornado", "Tsunami", "UFO", "BlackHole", "Sandstorm" },
+	Disasters = { "Earthquake", "Fire", "Meteors", "Flood", "Lightning", "Tornado", "Tsunami", "UFO", "BlackHole", "Sandstorm", "Hail" },
 	DisasterConfig = { Flood = { maxHeight = 30 } }, -- el agua llega a la planta 1; la 2 y la torre quedan a salvo
 }
 
